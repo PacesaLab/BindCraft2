@@ -1,0 +1,10 @@
+{
+  "description": "Allow cysteine and require a geometrically detected disulfide",
+  "weights_disulfide": 1.0,
+  "disulfide_distance": 3.8,
+  "disulfide_sequence_separation": 3,
+  "min_binder_disulfides_final": 1,
+  "aa_bias": {
+    "C": 1.0
+  }
+}

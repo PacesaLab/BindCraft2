@@ -1,0 +1,45 @@
+[project]
+name = "bindcraft"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "jax>=0.11,<0.12",
+    "dm-haiku",
+    "optax",
+    "biotite",
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "ml_collections",
+    "absl-py",
+]
+
+[project.scripts]
+bindcraft = "bindcraft.cli:main"
+
+[project.optional-dependencies]
+# The GPU environment every recorded baseline was measured in carries jax-cuda13-plugin and
+# jax-cuda13-pjrt, so cuda13 is the extra that reproduces that stack.
+# jax[cuda1x] carries the matching cuDNN for the architecture it is installed on. cuEquivariance
+# does not ride along with it: cuequivariance-jax is pure python and its fused kernels come from an
+# ops wheel built against one CUDA major version, so the extra names the one that matches, and both
+# publish x86-64 and aarch64 builds.
+cuda12 = ["jax[cuda12]>=0.11,<0.12", "cuequivariance-jax>=0.11,<0.12", "cuequivariance-ops-cu12>=0.11,<0.12"]
+cuda13 = ["jax[cuda13]>=0.11,<0.12", "cuequivariance-jax>=0.11,<0.12", "cuequivariance-ops-cu13>=0.11,<0.12"]
+rocm = ["jax[rocm7-local]>=0.11,<0.12"]
+oneapi = ["jax[oneapi]>=0.11,<0.12"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+#The package sits at the repository root, so discovery is told which top-level name is the package
+#and leaves containers, docs and examples alone.
+[tool.setuptools.packages.find]
+include = ["bindcraft*"]
+
+# ProteinMPNN rides along with the package so an installation redesigns sequences out of the box.
+# AlphaFold parameters are 5.3 GB and are downloaded on first use instead; weights/alphafold is
+# where a container bakes them.
+[tool.setuptools.package-data]
+bindcraft = ["weights/proteinmpnn/*/*.npz", "weights/README.md"]

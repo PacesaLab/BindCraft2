@@ -1,0 +1,118 @@
+{
+  "mpnn_model": "v_48_020",
+  "mpnn_variant": "negative",
+  "validation_recycles": 3,
+  "validation_crop_flank": 5,
+  "autotune": true,
+  "attention_backend": "auto",
+  "use_cueq": false,
+  "subbatch_size": "auto",
+  "trajectory_only": false,
+  "resume": true,
+  "hash_design_names": true,
+  "relax_accepted_designs": false,
+  "archive_trajectories": false,
+  "save_failed_refolds": true,
+  "save_failed_trajectories": true,
+  "save_binder_monomers": true,
+  "save_design_animations": false,
+  "save_design_frames": false,
+  "save_design_sequences": false,
+  "save_loss_plots": false,
+  "betasheet_reopt_trigger": 0.15,
+  "betasheet_reopt_extra_refine_steps": 0,
+  "betasheet_reopt_extra_anneal_steps": 0,
+  "min_plddt_screen": 0.6,
+  "min_plddt_refine": 0.6,
+  "min_plddt_anneal": 0.65,
+  "min_plddt_harden": 0.65,
+  "min_plddt_final": 0.7,
+  "sequence_candidates": 10,
+  "kept_sequences": 1,
+  "enough_passing_sequences": 3,
+  "redesign_interface": false,
+  "design_dropout": true,
+  "forced_targeting": false,
+  "design_recycles": 1,
+  "target_flexibility": 0.0,
+  "bigbang_initialization": false,
+  "initial_guess": false,
+  "desperation": true,
+  "weights_plddt_loss": 0.1,
+  "weights_iptm_loss": 0.05,
+  "weights_interface_contacts": 1.0,
+  "weights_interface_pae": 0.1,
+  "weights_binder_contacts": 1.0,
+  "weights_binder_pae": 0.4,
+  "weights_binder_helicity": -0.3,
+  "weights_compactness": 0.5,
+  "losses": {
+    "plddt_loss": {
+      "params": {
+        "prediction_state": "complex",
+        "chain": "binder"
+      }
+    },
+    "binder_pae": {
+      "params": {
+        "prediction_state": "complex",
+        "chain": "binder"
+      }
+    },
+    "compactness": {
+      "params": {
+        "prediction_state": "complex",
+        "chain": "binder"
+      }
+    },
+    "binder_contacts": {
+      "params": {
+        "prediction_state": "complex",
+        "chain": "binder"
+      }
+    },
+    "binder_helicity": {
+      "params": {
+        "prediction_state": "complex",
+        "chain": "binder"
+      }
+    },
+    "interface_contacts": {
+      "params": {
+        "cutoff": 20.0,
+        "contacts_per_residue": 2
+      }
+    }
+  },
+  "filters": {
+    "Unbound_Binder_pLDDT": {
+      "threshold": 0.8,
+      "higher": true
+    },
+    "pTM": {
+      "threshold": 0.55,
+      "higher": true
+    },
+    "i_pTM": {
+      "threshold": 0.7,
+      "higher": true
+    },
+    "i_pAE": {
+      "threshold": 0.35,
+      "higher": false
+    },
+    "Backbone_Clashes": {
+      "threshold": 0,
+      "higher": false
+    },
+    "Interface_Residues": {
+      "threshold": 7,
+      "higher": true
+    }
+  },
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.7,
+  "min_plddt_mutate": 0.6
+}

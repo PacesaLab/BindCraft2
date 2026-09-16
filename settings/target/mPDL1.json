@@ -1,0 +1,4 @@
+{
+  "description": "Mouse PD-L1, at the residues answering the human PD-1 interface",
+  "targets": [{"name": "mPDL1", "target_path": "structures/mPDL1.pdb", "chains": "A", "hotspots": "36,38,48,97"}]
+}

@@ -1,0 +1,35 @@
+{
+  "description": "Two domains on one 120-300 residue chain, with separation and linker objectives",
+  "binder_lengths": [
+    120,
+    300
+  ],
+  "aa_bias": {
+    "C": 0
+  },
+  "design_recycles": 2,
+  "screen_steps": 100,
+  "refine_steps": 50,
+  "anneal_steps": 90,
+  "harden_steps": 10,
+  "mutate_steps": 30,
+  "weights_multidomain": 1.25,
+  "weights_binder_pae": 0.1,
+  "weights_binder_contacts": 0,
+  "weights_compactness": 0,
+  "n_domains": 2,
+  "min_domain_size": 50,
+  "max_domain_size": 180,
+  "max_domains": 2,
+  "domain_rg_weight": 0.5,
+  "domain_sep_weight": 1.0,
+  "domain_contact_cutoff": 8.0,
+  "domain_pae_margin": 0.2,
+  "domain_linker_helix_weight": 0.5,
+  "max_interdomain_contact_final": 0.05,
+  "min_domain_separation_ratio_final": 1.0,
+  "min_plddt_final": 0.75,
+  "min_ptm_final": 0.4,
+  "max_ipae_final": 0.45,
+  "min_monomer_plddt_final": 0.7
+}

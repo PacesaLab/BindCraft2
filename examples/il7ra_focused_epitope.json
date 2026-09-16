@@ -1,0 +1,22 @@
+{
+  "target": "hIL7RA",
+  "binder_lengths": [
+    60,
+    100
+  ],
+  "number_of_final_designs": 5,
+  "max_trajectories": 200,
+  "min_hotspot_contact_final": 0.5,
+  "min_plddt_refine": 0.65,
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_plddt_mutate": 0.65,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/il7ra_focused_epitope",
+  "aa_bias": {
+    "C": 0
+  },
+  "forced_targeting": true
+}

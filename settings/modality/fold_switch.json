@@ -1,0 +1,11 @@
+{
+  "description": "The whole fold differs between free and bound, under a TM-score ceiling of 0.6",
+  "weights_induced_fit_global": 1.0,
+  "induced_fit_tm_target": 0.6,
+  "max_induced_fit_tm_final": 0.6,
+  "filters": {
+    "Binder_RMSD": {
+      "threshold": null
+    }
+  }
+}

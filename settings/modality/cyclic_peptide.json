@@ -1,0 +1,24 @@
+{
+  "description": "A 7-20 residue peptide closed head to tail; read Cyclic_Closure_Distance",
+  "validation_model": "multimer",
+  "cyclize_peptide": true,
+  "binder_lengths": [
+    6,
+    16
+  ],
+  "aa_bias": {
+    "C": 0
+  },
+  "refine_steps": 75,
+  "weights_iptm_loss": 0.1,
+  "weights_compactness": 0.0,
+  "max_ipae_final": 0.33,
+  "filters": {
+    "pTM": {
+      "threshold": null
+    },
+    "Unbound_Binder_pLDDT": {
+      "threshold": null
+    }
+  }
+}

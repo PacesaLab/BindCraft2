@@ -1,0 +1,25 @@
+{
+  "target": "hPDL1",
+  "binder_lengths": [
+    60,
+    100
+  ],
+  "number_of_final_designs": 5,
+  "max_trajectories": 60,
+  "weights_humanization": 1.0,
+  "humanization_species": "human",
+  "humanization_mhc2_weight": 1.0,
+  "humanization_coupling_weight": 0.5,
+  "max_mhc_anchor_score_final": 0.5,
+  "min_plddt_refine": 0.65,
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_plddt_mutate": 0.65,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/pdl1_humanization",
+  "aa_bias": {
+    "C": 0
+  }
+}

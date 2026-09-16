@@ -1,0 +1,6 @@
+{
+  "description": "Bring the N and C termini within 10 angstroms of each other",
+  "weights_termini_distance": 1.0,
+  "termini_distance_threshold": 7.0,
+  "max_termini_distance_final": 10.0
+}

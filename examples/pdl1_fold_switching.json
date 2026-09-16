@@ -1,0 +1,47 @@
+{
+  "target": "hPDL1",
+  "binder_lengths": [
+    120,
+    180
+  ],
+  "number_of_final_designs": 10,
+  "max_trajectories": 80,
+  "min_plddt_refine": 0.65,
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_plddt_mutate": 0.65,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "weights_fold_switching": 3,
+  "weights_compactness": 0.15,
+  "weights_binder_contacts": 0.5,
+  "losses": {
+    "fold_switching": {
+      "params": {
+        "tm_target": 0.45,
+        "binder_shapes": [
+          [
+            "hPDL1"
+          ],
+          [
+            "binder_alone"
+          ]
+        ]
+      }
+    }
+  },
+  "max_induced_fit_tm_final": 0.6,
+  "project_folder": "results/pdl1_fold_switching",
+  "aa_bias": {
+    "C": 0
+  },
+  "binder_shapes": [
+    [
+      "hPDL1"
+    ],
+    [
+      "binder_alone"
+    ]
+  ]
+}

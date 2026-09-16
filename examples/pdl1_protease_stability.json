@@ -1,0 +1,28 @@
+{
+  "target": "hPDL1",
+  "binder_lengths": [
+    60,
+    100
+  ],
+  "number_of_final_designs": 5,
+  "max_trajectories": 60,
+  "weights_protease_sites": 1.0,
+  "weights_exposed_loops": 0.5,
+  "weights_exposed_termini": 0.5,
+  "exposed_loops_measure": "plddt",
+  "exposed_loops_distinguish_sheets": true,
+  "max_protease_site_score_final": 0.5,
+  "max_exposed_loop_fraction_final": 0.35,
+  "max_terminus_exposure_final": 0.6,
+  "min_plddt_refine": 0.65,
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_plddt_mutate": 0.65,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/pdl1_protease_stability",
+  "aa_bias": {
+    "C": 0
+  }
+}

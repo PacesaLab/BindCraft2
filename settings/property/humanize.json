@@ -1,0 +1,8 @@
+{
+  "description": "Human-like sequence preferences and an MHC-II anchor-score objective",
+  "weights_humanization": 1.0,
+  "humanization_species": "human",
+  "humanization_mhc2_weight": 1.0,
+  "humanization_coupling_weight": 0.5,
+  "max_mhc_anchor_score_final": 1.95
+}

@@ -1,0 +1,33 @@
+{
+  "target": "dynorphin_a",
+  "binder_lengths": [
+    55,
+    65,
+    75
+  ],
+  "crop_fasta_sequence": [
+    13,
+    13
+  ],
+  "number_of_final_designs": 5,
+  "max_trajectories": 150,
+  "weights_com_distance": 0.1,
+  "losses": {
+    "com_distance": {
+      "params": {
+        "radius_ratio": 0.7
+      }
+    }
+  },
+  "min_plddt_refine": 0.65,
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_plddt_mutate": 0.65,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.5,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/dynorphin_idr",
+  "aa_bias": {
+    "C": 0
+  }
+}

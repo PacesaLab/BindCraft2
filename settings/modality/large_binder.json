@@ -1,0 +1,32 @@
+{
+  "description": "A longer binder, with extended optimisation; name binder_lengths as well",
+  "binder_lengths": [
+    250,
+    600
+  ],
+  "screen_steps": 100,
+  "refine_steps": 50,
+  "anneal_steps": 90,
+  "harden_steps": 10,
+  "mutate_steps": 30,
+  "design_models": 3,
+  "validation_model": "multimer",
+  "weights_plddt_loss": 1.0,
+  "weights_iptm_loss": 0.1,
+  "weights_interface_contacts": 0.8,
+  "weights_binder_contacts": 1.8,
+  "weights_interface_pae": 0.5,
+  "weights_binder_pae": 0.8,
+  "weights_binder_helicity": -0.2,
+  "weights_compactness": 0.1,
+  "min_plddt_screen": 0.6,
+  "min_plddt_refine": 0.6,
+  "min_plddt_mutate": 0.6,
+  "min_monomer_plddt_final": 0.6,
+  "filters": {
+    "Binder_RMSD": {
+      "threshold": 3.5,
+      "higher": false
+    }
+  }
+}

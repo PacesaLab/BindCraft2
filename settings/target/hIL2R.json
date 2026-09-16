@@ -1,0 +1,4 @@
+{
+  "description": "The human IL-2 receptor beta and gamma assembly, hotspots on both chains",
+  "targets": [{"name": "hIL2R", "target_path": "structures/hIL2R_beta_gamma.pdb", "chains": "A,B", "hotspots": "A67,A68,A96,A99,A101,A159,A160,B125,B181,B229-231"}]
+}

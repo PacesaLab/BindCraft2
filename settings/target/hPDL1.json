@@ -1,0 +1,4 @@
+{
+  "description": "Human PD-L1, with the PD-1 interface as hotspots",
+  "targets": [{"name": "hPDL1", "target_path": "structures/hPDL1.pdb", "chains": "A", "hotspots": "54,56,66,115"}]
+}

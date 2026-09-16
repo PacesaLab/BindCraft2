@@ -1,0 +1,17 @@
+{
+  "description": "A new miniprotein binder of 60-100 residues, folded from nothing",
+  "binder_lengths": [
+    60,
+    180
+  ],
+  "aa_bias": {
+    "C": 0
+  },
+  "min_monomer_plddt_final": 0.7,
+  "filters": {
+    "Binder_RMSD": {
+      "threshold": 3.5,
+      "higher": false
+    }
+  }
+}

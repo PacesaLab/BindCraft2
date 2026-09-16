@@ -1,0 +1,9 @@
+{
+  "description": "Point both chain ends away from the target",
+  "weights_termini_angle": 0.1,
+  "weights_n_terminus_away": 0.5,
+  "weights_c_terminus_away": 0.5,
+  "min_termini_away_cosine_final": 0.0,
+  "min_n_terminus_away_cosine_final": 0.0,
+  "min_c_terminus_away_cosine_final": 0.0
+}

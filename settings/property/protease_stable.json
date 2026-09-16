@@ -1,0 +1,11 @@
+{
+  "description": "Penalise protease cleavage motifs, exposed loops and exposed termini",
+  "weights_protease_sites": 1.0,
+  "weights_exposed_loops": 0.5,
+  "weights_exposed_termini": 0.5,
+  "exposed_loops_measure": "plddt",
+  "exposed_loops_distinguish_sheets": true,
+  "max_protease_site_score_final": 0.5,
+  "max_exposed_loop_fraction_final": 0.7,
+  "max_terminus_exposure_final": 0.6
+}

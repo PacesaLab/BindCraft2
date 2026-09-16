@@ -1,0 +1,18 @@
+# Environment definition for a site whose scheduler launches containers through enroot. Set image to
+# the squashfs built from containers/Dockerfile, mount the trees holding the settings files and the
+# output folder, and launch with
+#   srun --environment=/path/to/bindcraft.toml bindcraft design settings.json
+image = "/path/to/bindcraft.sqsh"
+mounts = [
+    "/scratch/your-user:/scratch/your-user",
+    "/projects/your-group:/projects/your-group",
+]
+workdir = "/scratch/your-user"
+
+[env]
+XLA_PYTHON_CLIENT_PREALLOCATE = "false"
+# The image declares these two as well; an environment definition that replaces its environment has
+# to carry them, because without them the container hook injects no driver and the campaign runs on
+# the CPU.
+NVIDIA_VISIBLE_DEVICES = "all"
+NVIDIA_DRIVER_CAPABILITIES = "compute,utility"

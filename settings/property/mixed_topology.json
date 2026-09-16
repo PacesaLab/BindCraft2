@@ -1,0 +1,12 @@
+{
+  "description": "At most 50% helix and at least 20% beta sheet",
+  "weights_non_helical": 1.0,
+  "weights_binder_helicity": 0,
+  "max_helix_fraction_final": 0.5,
+  "filters": {
+    "Binder_BetaSheet_Fraction": {
+      "threshold": 0.2,
+      "higher": true
+    }
+  }
+}

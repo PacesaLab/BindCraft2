@@ -1,0 +1,8 @@
+{
+  "target": "hPDL1",
+  "modality": "ARP",
+  "number_of_final_designs": 5,
+  "max_trajectories": 100,
+  "max_off_paratope_contact_final": 0.0,
+  "project_folder": "results/pdl1_arp_paratope_only"
+}

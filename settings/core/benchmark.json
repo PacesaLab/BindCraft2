@@ -1,0 +1,6 @@
+{
+  "description": "A reproducible run for comparing changes: one fixed seed, no adaptive tuning or desperation",
+  "campaign_seed": 0,
+  "autotune": false,
+  "desperation": false
+}

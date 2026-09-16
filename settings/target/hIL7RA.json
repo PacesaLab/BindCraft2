@@ -1,0 +1,4 @@
+{
+  "description": "Human IL-7R alpha, hotspots on one ten-residue patch and the rest of the exposed face kept free",
+  "targets": [{"name": "hIL7RA", "target_path": "structures/hIL7RA.pdb", "chains": "A", "hotspots": "100,101,102,158,159,161,211,212,213,214", "coldspots": "131-134,139,196-200,219-231"}]
+}

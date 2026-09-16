@@ -1,0 +1,4 @@
+{
+  "description": "Human PD-1 as an off-target to avoid, at its PD-L1 interface",
+  "targets": [{"name": "hPD1", "objective": "detarget", "target_path": "structures/hPD1.pdb", "chains": "A", "hotspots": "64,126,129,133"}]
+}

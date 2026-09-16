@@ -1,0 +1,5 @@
+{
+  "description": "Concentrate the paratope on the target's declared hotspots",
+  "forced_targeting": true,
+  "min_hotspot_contact_final": 0.5
+}

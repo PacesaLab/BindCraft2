@@ -1,0 +1,11 @@
+{
+  "description": "The interface moves at least 5 angstroms between the free and bound prediction",
+  "weights_induced_fit_interface": 0.224,
+  "induced_fit_delta": 5.0,
+  "min_induced_fit_interface_rmsd_final": 5.0,
+  "filters": {
+    "Binder_RMSD": {
+      "threshold": null
+    }
+  }
+}

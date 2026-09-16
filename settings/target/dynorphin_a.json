@@ -1,0 +1,4 @@
+{
+  "description": "Dynorphin A, a disordered peptide target read from its sequence",
+  "targets": [{"name": "dynorphin_a", "target_path": "structures/DynorphinA_IDR.fasta"}]
+}

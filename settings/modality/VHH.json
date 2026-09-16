@@ -1,0 +1,20 @@
+{
+  "description": "The VHH single-domain antibody scaffold with editable CDRs; samples both paratope conformations",
+  "binder_scaffold": "scaffolds/VHH.cif",
+  "mutate_positions": "A26-32,A33*,A35*,A37*,A45*,A46*,A47*,A49*,A50*,A52-57(5-7),A59,A97-99*,A100-114(5-12),A115,A116",
+  "paratope_conformations": [
+    "extended",
+    "folded_back"
+  ],
+  "weights_binder_intra_coldspot": 1.0,
+  "weights_binder_coldspot": 1.0,
+  "design_models": 3,
+  "validation_model": "multimer",
+  "min_scaffold_sequence_retained_final": 1.0,
+  "aa_bias": {
+    "F": 0.7,
+    "W": 0.3,
+    "Y": 0.9
+  },
+  "min_monomer_plddt_final": 0.7
+}

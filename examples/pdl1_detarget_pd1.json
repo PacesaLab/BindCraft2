@@ -1,0 +1,26 @@
+{
+  "target": ["hPDL1", "hPD1"],
+  "binder_lengths": [
+    60,
+    100
+  ],
+  "number_of_final_designs": 10,
+  "max_trajectories": 200,
+  "min_plddt_refine": 0.65,
+  "min_iptm_anneal": 0.5,
+  "min_iptm_harden": 0.5,
+  "min_plddt_mutate": 0.65,
+  "min_iptm_mutate": 0.5,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "max_detarget_iptm_screen": 0.5,
+  "max_detarget_iptm_refine": 0.5,
+  "max_detarget_iptm_anneal": 0.5,
+  "max_detarget_iptm_harden": 0.5,
+  "max_detarget_iptm_mutate": 0.5,
+  "max_detarget_iptm_final": 0.5,
+  "project_folder": "results/pdl1_detarget_pd1",
+  "aa_bias": {
+    "C": 0
+  }
+}
