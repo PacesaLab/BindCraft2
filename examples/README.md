@@ -1,6 +1,6 @@
 # Example campaigns
 
-[Back to the README](../README.md) · [Modality settings](../README.md#design-modalities) · [Compatibility chart](../README.md#combining-modalities) · [Full reference](../docs/reference.md)
+[Back to the README](../README.md) · [Modality settings](../README.md#design-modalities) · [Compatibility chart](../README.md#combining-modalities) · [Full reference](../docs/source/reference.md)
 
 Start with [pdl1.json](pdl1.json) to use named presets. It names the shipped [hPDL1 target](../settings/target/hPDL1.json) and the `binder` modality, and requests 10 accepted designs and sets an output folder. BC2 supplies the detailed design settings and filters.
 
@@ -30,7 +30,7 @@ bindcraft design examples/my_target.json
 
 A named target ships its own structure under [settings/target/](../settings/target/). Target and custom scaffold paths you write yourself are read from the JSON file’s directory. Running the quickstart from the repository root writes to `results/pdl1/`, as set by `project_folder`. Named scaffold presets resolve their own files under `scaffolds/`. `number_of_final_designs` counts accepted designs. The quickstart has no attempt limit; set `max_trajectories` only if you want one. `metadata.json` is a separate optional input for author or project fields, supplied with `--metadata`.
 
-The other examples below demonstrate explicit settings for particular experiments. **Their explicit values override any presets you add**, including lengths, amino-acid preferences and filters. Use the small file when switching formats through `--modality`; consult a detailed example when you want to customise that experiment. See [input tiers and precedence](../docs/reference.md#input-tiers-and-overrides).
+The other examples below demonstrate explicit settings for particular experiments. **Their explicit values override any presets you add**, including lengths, amino-acid preferences and filters. Use the small file when switching formats through `--modality`; consult a detailed example when you want to customise that experiment. See [input tiers and precedence](../docs/source/reference.md#input-tiers-and-overrides).
 
 ## Choose an example
 

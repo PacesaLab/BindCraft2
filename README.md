@@ -1,4 +1,4 @@
-![BC2 — protein binder design](docs/bc2_header.png)
+![BC2 — protein binder design](docs/.assets/bc2_header.png)
 
 # BC2
 
@@ -6,9 +6,9 @@
 
 BC2 brings de novo miniproteins, scaffolded binders, cyclic peptides and multistate design into one workflow. Describe your target, choose the kind of binder you want, and add properties that matter for your experiment. Named presets supply the design settings and acceptance filters; you can adjust individual settings when needed.
 
-BC2 combines sequence optimisation through AlphaFold 2 with ProteinMPNN redesign, then evaluates candidates with separate AlphaFold models and structural filters. It returns sequences, predicted complexes and ranked results, with measurements of the interface, fold and molecular properties to help choose candidates for testing. These are computational designs: binding, selectivity and the requested biological behaviour require experimental validation.
+BC2 combines sequence optimisation through [AlphaFold 2](https://www.nature.com/articles/s41586-021-03819-2) with [ProteinMPNN](https://www.science.org/doi/10.1126/science.add2187) redesign, then evaluates candidates with separate AlphaFold models and structural filters. It returns sequences, predicted complexes and ranked results, with measurements of the interface, fold and molecular properties to help choose candidates for testing. These are computational designs: binding, selectivity and the requested biological behaviour require experimental validation.
 
-[Installation](#installation) · [First design](#run-your-first-design) · [Your target](#design-against-your-own-target) · [Input tiers](#how-the-input-tiers-work) · [Modalities](#design-modalities) · [Properties](#additional-design-properties) · [Results](#read-your-results) · [Design guide](docs/design-guide.md) · [Settings](docs/reference.md) · [Outputs](docs/outputs.md) · [Installing and running](docs/installation.md)
+[Installation](#installation) · [First design](#run-your-first-design) · [Your target](#design-against-your-own-target) · [Input tiers](#how-the-input-tiers-work) · [Modalities](#design-modalities) · [Properties](#additional-design-properties) · [Results](#read-your-results) · [Design guide](docs/source/design-guide.md) · [Settings](docs/source/reference.md) · [Outputs](docs/source/outputs.md) · [Installing and running](docs/source/installation.md)
 
 ## Installation
 
@@ -21,7 +21,7 @@ bash install.sh
 source .venv/bin/activate
 ```
 
-In a new terminal, return to `BC2` and run `source .venv/bin/activate` again. See the [installation and running guide](docs/installation.md) for existing environments, older GPUs, clusters, containers and troubleshooting.
+In a new terminal, return to `BC2` and run `source .venv/bin/activate` again. See the [installation and running guide](docs/source/installation.md) for existing environments, older GPUs, clusters, containers and troubleshooting.
 
 ## Run your first design
 
@@ -67,7 +67,7 @@ Change `target.pdb` and `A` to match your structure, then choose your binder len
 
 For a shipped target, replace the `targets` entry with `"target": "hPDL1"`. List the available targets with `bindcraft design --list-targets`.
 
-BC2 accepts PDB, mmCIF and FASTA inputs. See [target and scaffold settings](docs/reference.md#define-the-target-and-binder) for chain selections, custom scaffolds and sequence targets.
+BC2 accepts PDB, mmCIF and FASTA inputs. See [target and scaffold settings](docs/source/reference.md#define-the-target-and-binder) for chain selections, custom scaffolds and sequence targets.
 
 ## How the input tiers work
 
@@ -100,7 +100,7 @@ Edit the JSON file for a persistent choice, or use the command line for a one-of
 | `"humanize": true` | `--humanize` |
 | `"termini_accessible": true` | `--termini-accessible` |
 
-Use the exact names shown here, including capitals and underscores. `bindcraft design --help` lists the available targets, modalities and property flags. Start from [pdl1.json](examples/pdl1.json) when choosing presets; the other [example campaigns](examples/README.md) contain more specific settings that still take precedence when you add a preset. See [input tiers and overrides](docs/reference.md#input-tiers-and-overrides) for details.
+Use the exact names shown here, including capitals and underscores. `bindcraft design --help` lists the available targets, modalities and property flags. Start from [pdl1.json](examples/pdl1.json) when choosing presets; the other [example campaigns](examples/README.md) contain more specific settings that still take precedence when you add a preset. See [input tiers and overrides](docs/source/reference.md#input-tiers-and-overrides) for details.
 
 ## Design modalities
 
@@ -121,7 +121,7 @@ Choose a binder format, then add compatible targeting or conformational options.
 | **scFv variable domains** | [scFv](settings/modality/scFv.json) | Paired antibody variable domains. BC2 models two chains; the connecting linker must be designed separately. |
 | **Fab** | [Fab](settings/modality/Fab.json) | An antibody-binding fragment with heavy and light chains, including their constant domains. |
 
-The antibody and ARP presets use supplied [scaffolds](scaffolds/). See [scaffold editing](docs/reference.md#define-the-target-and-binder) to use your own.
+The antibody and ARP presets use supplied [scaffolds](scaffolds/). See [scaffold editing](docs/source/reference.md#define-the-target-and-binder) to use your own.
 
 ### Target recognition
 
@@ -135,7 +135,7 @@ Most targeting choices are made in the `targets` entries of your JSON file:
 | **Bind a peptide or disordered target** | Point `target_path` to a FASTA file. Choose the binder format separately. | [Dynorphin A](examples/dynorphin_idr.json) |
 | **Bind a receptor assembly** | Select its chains with `"chains": "A,B"`; use chain-prefixed hotspots such as `"A54,B12-16"`. | [IL-2 receptor](examples/il2_receptor.json) |
 
-For a **focused epitope**, add [--forced-targeting](settings/property/forced_targeting.json) and name `hotspots` on a structured target. See [targeting options](docs/reference.md#targeting-options) for the method and acceptance criteria.
+For a **focused epitope**, add [--forced-targeting](settings/property/forced_targeting.json) and name `hotspots` on a structured target. See [targeting options](docs/source/reference.md#targeting-options) for the method and acceptance criteria.
 
 ### Conformational design
 
@@ -144,7 +144,7 @@ For a **focused epitope**, add [--forced-targeting](settings/property/forced_tar
 | **Interface movement on binding** | [induced_fit](settings/modality/induced_fit.json) | A binder whose binding surface changes shape between the free and bound states. |
 | **Whole-fold change on binding** | [fold_switch](settings/modality/fold_switch.json) | A binder intended to adopt different folds when free and bound. |
 
-These presets each use **one target**. Combine one with a compatible binder format, for example `--modality binder,induced_fit`. [Conformational design details](docs/reference.md#conformational-design) cover the structural criteria and designs with explicit groups of conformations.
+These presets each use **one target**. Combine one with a compatible binder format, for example `--modality binder,induced_fit`. [Conformational design details](docs/source/reference.md#conformational-design) cover the structural criteria and designs with explicit groups of conformations.
 
 ### Additional design properties
 
@@ -168,13 +168,13 @@ For example:
 bindcraft design examples/pdl1.json --mixed-topology --set 'project_folder=results/pdl1_mixed'
 ```
 
-These properties are judged using computational proxies. See [property objectives and acceptance filters](docs/reference.md#property-objectives-and-acceptance-filters) for what each one measures and requires, and [starting conformations](docs/reference.md#starting-conformations) for the optional `--initial-guess` and `--bigbang` flags.
+These properties are judged using computational proxies. See [property objectives and acceptance filters](docs/source/reference.md#property-objectives-and-acceptance-filters) for what each one measures and requires, and [starting conformations](docs/source/reference.md#starting-conformations) for the optional `--initial-guess` and `--bigbang` flags.
 
 ### Combining modalities
 
-![Compatibility of binder design modalities: supported combinations in green, unsupported combinations in red](docs/modality_compatibility.png)
+![Compatibility of binder design modalities: supported combinations in green, unsupported combinations in red](docs/.assets/modality_compatibility.png)
 
-The chart shows compatible pairs of biological design objectives. The named `fold_switch` preset still requires one target; see [conformational design](docs/reference.md#conformational-design). BC2 checks declared incompatibilities before starting a campaign.
+The chart shows compatible pairs of biological design objectives. The named `fold_switch` preset still requires one target; see [conformational design](docs/source/reference.md#conformational-design). BC2 checks declared incompatibilities before starting a campaign.
 
 ## Continue a campaign
 
@@ -184,7 +184,7 @@ A campaign resumes by default: run it again against the same folder and it carri
 bindcraft design examples/pdl1.json
 ```
 
-Repeat any additional flags used to start that run. Add `--set 'resume=false'` to refuse a non-empty folder instead. See [campaign records](docs/reference.md#resolved-settings-and-reproducibility) for reproducibility and optional author or project metadata.
+Repeat any additional flags used to start that run. Add `--set 'resume=false'` to refuse a non-empty folder instead. See [campaign records](docs/source/reference.md#resolved-settings-and-reproducibility) for reproducibility and optional author or project metadata.
 
 ## Read your results
 
@@ -216,9 +216,9 @@ bindcraft rank results/pdl1 --on i_pTM
 bindcraft filter results/pdl1
 ```
 
-The filter command reports which criteria rejected candidates. See [ranking and refiltering](docs/outputs.md#ranking-and-refiltering) for choosing new thresholds and saving a revised shortlist without running design again.
+The filter command reports which criteria rejected candidates. See [ranking and refiltering](docs/source/outputs.md#ranking-and-refiltering) for choosing new thresholds and saving a revised shortlist without running design again.
 
-Confidence scores are not binding affinities. For cropped targets, inspect the binder against the full structure; for cell-surface targets, consider glycans, membrane orientation and access by other proteins. The [output and measurement reference](docs/outputs.md) explains every file and every measurement.
+Confidence scores are not binding affinities. For cropped targets, inspect the binder against the full structure; for cell-surface targets, consider glycans, membrane orientation and access by other proteins. The [output and measurement reference](docs/source/outputs.md) explains every file and every measurement.
 
 ## Running on a cluster
 
@@ -228,11 +228,11 @@ Submit from the repository root:
 sbatch bindcraft.slurm examples/pdl1.json
 ```
 
-Add your site's account and partition options if required. See [Slurm and other schedulers](docs/installation.md#slurm-and-other-schedulers) for resource requests, containers and offline nodes.
+Add your site's account and partition options if required. See [Slurm and other schedulers](docs/source/installation.md#slurm-and-other-schedulers) for resource requests, containers and offline nodes.
 
 ## Reference
 
-[Settings, losses and filters](docs/reference.md) · [Outputs and measurements](docs/outputs.md) · [Installing and running](docs/installation.md) · [Example catalogue](examples/README.md) · [Container recipes](containers/README.md)
+[Settings, losses and filters](docs/source/reference.md) · [Outputs and measurements](docs/source/outputs.md) · [Installing and running](docs/source/installation.md) · [Example catalogue](examples/README.md) · [Container recipes](containers/README.md)
 
 Presets live in [settings/](settings/) and scaffolds in [scaffolds/](scaffolds/). For code navigation, [settings.py](bindcraft/settings.py) resolves the input tiers, [cli.py](bindcraft/cli.py) reads the flags, [loss.py](bindcraft/loss.py) defines design objectives, and [filters.py](bindcraft/filters.py) defines acceptance measurements.
 

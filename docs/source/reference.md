@@ -1,6 +1,6 @@
 # BC2 settings reference
 
-[First design](../README.md#run-your-first-design) · [Installation and running](installation.md) · [Outputs and measurements](outputs.md) · [Examples](../examples/README.md)
+[First design](../../README.md#run-your-first-design) · [Installation and running](installation.md) · [Outputs and measurements](outputs.md) · [Examples](../../examples/README.md)
 
 [Inputs](#input-tiers-and-overrides) · [Every setting](#every-setting-at-its-default) · [Targets and scaffolds](#define-the-target-and-binder) · [Stages](#design-stages-and-acceptance) · [Models](#models-and-sequence-redesign) · [Biological options](#biological-options) · [Losses](#losses) · [Filters](#filters) · [Autotuning](#autotuning-and-parameter-sweeps) · [Files and resources](#output-and-execution-settings)
 
@@ -17,7 +17,7 @@ bindcraft design --help
 | --- | --- | --- |
 | Core | Nothing | The baseline every campaign starts from, always loaded, in [settings/core/default.json](../settings/core/default.json). |
 | Core profile | `"core": "benchmark"`, or `--core benchmark` | An opt-in profile beside the baseline, from [settings/core/](../settings/core/). |
-| Modality | `"modality": "binder"` or a list such as `["VHH", "induced_fit"]` | Binder format and conformational objective; see [modality choices](../README.md#design-modalities). |
+| Modality | `"modality": "binder"` or a list such as `["VHH", "induced_fit"]` | Binder format and conformational objective; see [modality choices](../../README.md#design-modalities). |
 | Properties | Top-level booleans such as `"humanize": true` | Optional biological properties and starting conformations. |
 | Target | `"target": "hPDL1"` or `"target": ["hPDL1", "mPDL1"]` | Shipped structures and binding-site selections from [target presets](../settings/target/). |
 | Campaign | Your other JSON entries | Requested designs, output location and explicit adjustments. |

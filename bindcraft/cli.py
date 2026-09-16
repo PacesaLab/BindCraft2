@@ -120,7 +120,7 @@ def design_help_text() -> str:
                       'design properties, added by their own flag:', *described_preset_lines('property', flag=True), '',
                       'the settings changed most often, as --set KEY=VALUE:', *common_setting_lines(), '',
                       *SETTING_EXAMPLES, '',
-                      f'--list-settings names all {len(campaign_setting_names())} of them, and docs/reference.md says what each one does.', '',
+                      f'--list-settings names all {len(campaign_setting_names())} of them, and docs/source/reference.md says what each one does.', '',
                       'A preset only sets a default: --set and the settings file both win over it, and a combination',
                       'this package declares unsupported is refused before the campaign starts.'))
 
