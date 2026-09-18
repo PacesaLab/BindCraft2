@@ -47,3 +47,6 @@ Thumbs.db
 
 # Dev Containers
 .devcontainer/
+
+# Anything created by Claude
+.claude/

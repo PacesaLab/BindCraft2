@@ -1,10 +1,10 @@
 ![BC2 — protein binder design](docs/.assets/bc2_header.png)
 
-# BC2
+# BindCraft2
 
 **Design protein binders around the biology of your experiment.**
 
-BC2 brings de novo miniproteins, scaffolded binders, cyclic peptides and multistate design into one workflow. Describe your target, choose the kind of binder you want, and add properties that matter for your experiment. Named presets supply the design settings and acceptance filters; you can adjust individual settings when needed.
+BindCraft2 (BC2) brings de novo miniproteins, scaffolded binders, cyclic peptides and multistate design into one workflow. Describe your target, choose the kind of binder you want, and add properties that matter for your experiment. Named presets supply the design settings and acceptance filters; you can adjust individual settings when needed.
 
 BC2 combines sequence optimisation through [AlphaFold 2](https://www.nature.com/articles/s41586-021-03819-2) with [ProteinMPNN](https://www.science.org/doi/10.1126/science.add2187) redesign, then evaluates candidates with separate AlphaFold models and structural filters. It returns sequences, predicted complexes and ranked results, with measurements of the interface, fold and molecular properties to help choose candidates for testing. These are computational designs: binding, selectivity and the requested biological behaviour require experimental validation.
 

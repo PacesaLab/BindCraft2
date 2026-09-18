@@ -1,0 +1,12 @@
+{
+  "campaign_name": "crossreactive_pdl1",
+  "project_folder": "results/pdl1_xreact",
+  "modality": "binder",
+  "binder_lengths": [70, 100],
+  "number_of_final_designs": 20,
+  "targets": [
+    { "name": "hPDL1", "target_path": "hPDL1.pdb", "chains": "A", "hotspots": "A54,A56,A66,A115", "weight": 1.0 },
+    { "name": "mPDL1", "target_path": "mPDL1.pdb", "chains": "A", "hotspots": "A54,A56,A66,A115", "weight": 1.0 },
+    { "name": "hPD1",  "target_path": "hPD1.pdb",  "chains": "A", "weight": -0.5 }
+  ]
+}
