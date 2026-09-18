@@ -1,6 +1,6 @@
 # BC2 installation and running
 
-[First design](../../README.md#run-your-first-design) · [Settings](reference.md) · [Outputs and measurements](outputs.md) · [Examples](../../examples/README.md)
+[First design](../../README.md#run-your-first-design) · [Settings](reference.md) · [Outputs and measurements](outputs.md) · [Examples](examples.md)
 
 [Install](#install) · [Check it](#check-the-installation) · [Weights and caches](#model-weights-and-caches) · [Run a campaign](#run-a-campaign) · [GPU and memory](#gpu-and-memory-controls) · [Clusters](#slurm-and-other-schedulers) · [Containers](#containers) · [No internet](#machines-with-no-route-to-the-internet) · [Troubleshooting](#troubleshooting)
 

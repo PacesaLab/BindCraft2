@@ -1,6 +1,6 @@
 # BC2 settings reference
 
-[First design](../../README.md#run-your-first-design) · [Installation and running](installation.md) · [Outputs and measurements](outputs.md) · [Examples](../../examples/README.md)
+[First design](../../README.md#run-your-first-design) · [Installation and running](installation.md) · [Outputs and measurements](outputs.md) · [Examples](examples.md)
 
 [Inputs](#input-tiers-and-overrides) · [Every setting](#every-setting-at-its-default) · [Targets and scaffolds](#define-the-target-and-binder) · [Stages](#design-stages-and-acceptance) · [Models](#models-and-sequence-redesign) · [Biological options](#biological-options) · [Losses](#losses) · [Filters](#filters) · [Autotuning](#autotuning-and-parameter-sweeps) · [Files and resources](#output-and-execution-settings)
 
@@ -372,6 +372,7 @@ The shortcuts below turn the corresponding acceptance requirement into a floor (
 | `max_interdomain_contact_final` | `Interdomain_Contact_Fraction` — keep domains from collapsing together. |
 | `max_mhc_anchor_score_final` | `MHC_Anchor_Score` — limit the humanization proxy. |
 | `max_off_epitope_contact_final` | `Off_Epitope_Contact_Fraction` — focus contact within the protected epitope. |
+| `max_off_paratope_contact_final` | `Off_Paratope_Contact_Fraction` — keep contact within the designated paratope. |
 | `max_oligomer_symmetry_rmsd_final` | `Oligomer_Symmetry_RMSD` — require approximate cyclic symmetry. |
 | `max_protease_site_score_final` | `Protease_Site_Score` — limit predicted cleavage propensity. |
 | `max_scaffold_framework_rmsd_final` | `Scaffold_Framework_RMSD` — retain the starting framework geometry. |
@@ -457,6 +458,7 @@ A sweep needs `max_trajectories`, divides its budget between arms, and disables 
 | `project_folder` | `Binders` | Choose the results location. |
 | `hash_design_names` | true | False uses a shorter per-campaign counter; hashes remain recorded. |
 | `save_design_frames` | false | Keep one structure per recorded update/state. |
+| `save_design_sequences` | false | Keep the compressed amino-acid probability arrays for designed chains over the recorded updates. |
 | `save_design_trajectory` | false | Keep only the fold the trajectory ended on, before redesign: one file per target state, plus the unbound binder where the trajectory predicted one. |
 | `save_design_animations` | false | Keep interactive trajectory viewers; also enables frames. |
 | `save_loss_plots` | false | Keep metric plots; also enables frames. |

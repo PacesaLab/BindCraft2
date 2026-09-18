@@ -73,11 +73,11 @@ A campaign is a small JSON file naming at minimum
 You can run it with `bindcraft design <my_campaign.json>`. 
 
 However, there are many more settings you can use to customize your run including: 
-- `hotspots`
-- `binder_lengths`
-- `number_of_final_designs`
-- `max_trajectories`
-- `modality`
+- `hotspots`: The residues in the target that you want contacted by the binder. 
+- `binder_lengths`: length, length range, or list of possible lengths of the designed binder.
+- `number_of_final_designs`: How many accepted designs to collect.
+- `max_trajectories`: How many attempts are allowed, note that a difficult target may need thousands of attempts per design.
+- `modality`: Specific design objective, discussed more in the [next section](#3-choosing-a-modality). 
 
 See [Setting up a design](design-guide/02-setting-up-a-design.md) for the full settings table,
 worked JSON examples, and how structured, disordered, and multi-target inputs each behave.

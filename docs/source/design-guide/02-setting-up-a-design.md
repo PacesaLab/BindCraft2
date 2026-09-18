@@ -25,25 +25,31 @@ Run it from the root directory with:
 bindcraft design examples/pdl1_custom_target.json
 ```
 
-The only specifications your JSON file must have 
+These are only specifications your JSON file *must* have, however there are many more you may want to use to customize your run. 
 
-Shipped example targets need no path — `"target": "hPDL1"` reuses a prepared structure with its
-hotspots already chosen. `bindcraft design --list-targets --list-modalities --list-properties`
-shows what ships.
+```{note}
+Shipped example targets (hPDL1 and PD-L1) need no path:
+Using `"target": "hPDL1"` reuses a prepared structure that ships with BC2 with its
+hotspots already chosen. 
+`bindcraft design --list-targets --list-modalities --list-properties`
+shows what targets come with a BindCraft2 installation.
+```
 
 The settings that matter most when you set up a run:
 
 | Setting | What it does | Advice |
 | --- | --- | --- |
-| `targets[].target_path` / `chains` | The structure and which chains are the target | Prepare it first (see [What to look out for](07-common-pitfalls.md)). Multi-character chain names are fine. |
+| `targets[].target_path` | The path and file name where your target structure can be found. | Prepare it first (see [What to look out for](07-common-pitfalls.md)). Multi-character chain names are fine. |
+| `targets[].chains` | The structure and which chains are the target | Multiple chains can be selected via `"chains": "A,B"`. |
 | `targets[].hotspots` | The residues you want contacted, e.g. `A54,A56,B12-16` | **Optional but high-leverage.** BC2 works fine with none given — it then reads the whole surface and finds its own site. Name hotspots when you care *where* it binds, or the target is large and you want to steer it; leave them off to let it discover a site. |
 | `binder_lengths` | `[80,80]` fixes 80; `[60,100]` is a range; `[60,80,100]` is a choice list | Smaller binders are easier but bury less interface; longer binders reach flatter epitopes. The modality sets a sensible default range. |
 | `number_of_final_designs` | How many accepted designs to collect | Order 10–100 for a real campaign; a few for a smoke test. |
 | `max_trajectories` | Attempt budget | The safety cap. A hard target may need thousands of attempts per design. |
 | `modality` | Binder format and objective (see [Choosing a modality](03-choosing-a-modality.md)) | Pick this to match what you want to make. |
 
-Everything else has a defensible default. Resist the urge to tune weights and stage lengths on your
-first campaign.
+```{important}
+Everything else has a defensible default. Resist the urge to tune weights and change presets on your first design run. See what the default settings produce, and then adjust accordingly.
+```
 
 ## Target inputs — structured, disordered, and multiple
 

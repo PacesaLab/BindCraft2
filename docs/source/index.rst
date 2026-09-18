@@ -16,12 +16,17 @@ Explore the documentation below to learn how BindCraft2 works, choose the right 
 .. raw:: html
 
    <p>
-     <a class="bc2-cta-button" href="design-guide.html">Read the design guide</a>
+     <a class="bc2-cta-button" href="design-guide.html" title="Learn how BC2 works, choose a design modality, and understand the workflow end to end">Design Guide</a>
+     <a class="bc2-cta-button" href="installation.html" title="Install BC2, check the install, and run campaigns locally, on clusters, or in containers">Installation and Troubleshooting</a>
+     <a class="bc2-cta-button" href="reference.html" title="Look up every BC2 setting, its default, and what it controls">Reference Documentation</a>
+     <a class="bc2-cta-button" href="outputs.html" title="Understand BC2's output files, measurements, and how to rank and filter designs">Outputs and Measurements</a>
+     <a class="bc2-cta-button" href="examples.html" title="Browse worked example campaigns you can run or copy as a starting point">Examples</a>
    </p>
    <style>
-     .bc2-cta-button {
+     .bc2-cta-button,
+     .bc2-cta-button:visited {
        display: inline-block;
-       margin: 0.5em 0 1.5em;
+       margin: 0.5em 0.5em 1em 0;
        padding: 0.6em 1.4em;
        border-radius: 0.4em;
        background-color: var(--color-brand-primary);
@@ -29,7 +34,8 @@ Explore the documentation below to learn how BindCraft2 works, choose the right 
        font-weight: 600;
        text-decoration: none;
      }
-     .bc2-cta-button:hover {
+     .bc2-cta-button:hover,
+     .bc2-cta-button:visited:hover {
        background-color: var(--color-brand-content);
        color: var(--color-background-primary);
        text-decoration: none;
@@ -39,4 +45,11 @@ Explore the documentation below to learn how BindCraft2 works, choose the right 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   :hidden:
+
+   design-guide
+   installation
+   reference
+   outputs
+   examples
 

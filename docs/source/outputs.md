@@ -1,6 +1,6 @@
 # BC2 outputs and measurements
 
-[Settings](reference.md) · [Installation and running](installation.md) · [README](../../README.md)
+[Settings](reference.md) · [Installation and running](installation.md) · [Examples](examples.md) · [README](../../README.md)
 
 [Files](#files) · [Table conventions](#reading-the-tables) · [Measurements](#measurements) · [Trajectory viewers](#trajectory-records-and-viewers) · [Ranking and filtering](#ranking-and-refiltering) · [Sweeps](#sweeps)
 
