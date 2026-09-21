@@ -133,8 +133,9 @@ def append_metric_row(csv_path: str, row: dict) -> None:
     os.replace(partial_path, csv_path)
 
 def append_campaign_metrics(csv_path: str, row: dict) -> None:
+    #every recorded row carries the version that wrote it, so an old run is recognisable from its tables alone
     with locked_campaign_folder(csv_path):
-        append_metric_row(csv_path, row)
+        append_metric_row(csv_path, {**row, 'bindcraft_version': VERSION})
 
 COMPLETED_TRAJECTORY = 'completed'
 
@@ -475,7 +476,7 @@ def append_accepted_design(project_folder: str, row: dict, metric: str=RANKING_M
 
 @functools.cache
 def source_revision() -> str:
-    source_tree = str(Path(__file__).resolve().parents[2])
+    source_tree = str(Path(__file__).resolve().parents[1])
     try:
         revision = subprocess.run(['git', '-C', source_tree, 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
