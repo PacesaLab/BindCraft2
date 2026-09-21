@@ -1,8 +1,16 @@
 import math
 import os
+from importlib.metadata import PackageNotFoundError, version
 from bindcraft.protein import recorded_number
 
-VERSION = 'BindCraft 2 v1.0.0'
+def released_version() -> str:
+    """The version every output is stamped with, read from the installed package so it cannot drift from pyproject."""
+    try:
+        return f'BindCraft 2 v{version("bindcraft")}'
+    except PackageNotFoundError:
+        return 'BindCraft 2 (unreleased)'
+
+VERSION = released_version()
 ALWAYS_SUPPRESSED_METRICS = ('Unbound_Binder_pLDDT', 'Protomer_Identity_Fraction', 'Oligomer_Symmetry_RMSD', 'Backbone_Clashes', 'All_Atom_Clashes', 'Epitope_Residues_Contacted', 'Binder_Length', 'Binder_Mass_kDa', 'Binder_pI', 'Binder_Net_Charge', 'Binder_Extinction', 'Binder_Cysteines', 'Binder_Free_Cysteines', 'Binder_Disulfides', 'Interface_BuriedArea', 'Interface_BuriedArea_Fraction', 'Surface_Hydrophobicity', 'Interface_Hydrophobicity', 'SS_pLDDT', 'Target_RMSD', 'Binder_Helix_Fraction', 'Binder_BetaSheet_Fraction', 'Binder_Loop_Fraction', 'Interface_Helix_Fraction', 'Interface_BetaSheet_Fraction', 'Interface_Loop_Fraction')
 ACCEPTED_ONLY_METRICS = ('Induced_Fit_RMSD',)
 SYMMETRY_RMSD_LIMIT = 1.0
