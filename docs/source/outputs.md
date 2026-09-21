@@ -1,6 +1,6 @@
 # BC2 outputs and measurements
 
-[Settings](reference.md) · [Installation and running](installation.md) · [Examples](examples.md) · [README](../../README.md)
+[Reference Documentation](reference.md) · [Installation and running](installation.md) · [Examples](examples.md) · README (in your BindCraft2 repo's top level)
 
 [Files](#files) · [Table conventions](#reading-the-tables) · [Measurements](#measurements) · [Trajectory viewers](#trajectory-records-and-viewers) · [Ranking and filtering](#ranking-and-refiltering) · [Sweeps](#sweeps)
 

@@ -1,6 +1,6 @@
 # Setting up a design
 
-[Full guide](../design-guide.md) · [Settings](../reference.md) · [Outputs](../outputs.md)
+[Design Overview](../design-guide.md) · [Reference Documentation](../reference.md) · [Outputs and Measurements](../outputs.md)
 
 A campaign is a small JSON file, a simple example is:
 
@@ -39,7 +39,7 @@ The settings that matter most when you set up a run:
 
 | Setting | What it does | Advice |
 | --- | --- | --- |
-| `targets[].target_path` | The path and file name where your target structure can be found. | Prepare it first (see [What to look out for](07-common-pitfalls.md)). Multi-character chain names are fine. |
+| `targets[].target_path` | The path and file name where your target structure can be found. | Prepare it first (see [What to look out for](../design-guide.md#7-what-to-look-out-for-common-pitfalls)). Multi-character chain names are fine. |
 | `targets[].chains` | The structure and which chains are the target | Multiple chains can be selected via `"chains": "A,B"`. |
 | `targets[].hotspots` | The residues you want contacted, e.g. `A54,A56,B12-16` | **Optional but high-leverage.** BC2 works fine with none given — it then reads the whole surface and finds its own site. Name hotspots when you care *where* it binds, or the target is large and you want to steer it; leave them off to let it discover a site. |
 | `binder_lengths` | `[80,80]` fixes 80; `[60,100]` is a range; `[60,80,100]` is a choice list | Smaller binders are easier but bury less interface; longer binders reach flatter epitopes. The modality sets a sensible default range. |
@@ -55,20 +55,20 @@ Everything else has a defensible default. Resist the urge to tune weights and ch
 
 BC2 designs against whatever you put in `targets[].target_path`, and it accepts three kinds of input.
 
-**Structured domain (PDB or mmCIF).** The normal case — a folded domain with coordinates. Select the
+**Structured domain (PDB or mmCIF).** The normal case: a folded domain with coordinates, as is seen in the example at the top of this page. Select the
 chains with `chains`, name the epitope with `hotspots`, and residues to keep clear with `coldspots`
 (both use your structure's numbering). BC2 designs against exactly that conformation, so give it the
-biologically relevant assembly (see [What to look out for](07-common-pitfalls.md)).
+biologically relevant assembly (see [What to look out for](../design-guide.md#7-what-to-look-out-for-common-pitfalls)).
 
 **Disordered region or motif (FASTA).** If `target_path` is a FASTA **sequence**, the target has no
 structure, so BC2 treats it as an intrinsically disordered region (IDR) and **co-folds it with the
-binder** — this is how you bind disordered proteins, peptide motifs and linear epitopes. Because a
+binder** — this is how you bind disordered proteins, peptide motifs and linear epitopes. `dynorphin_idr.json` is one example that uses a FASTA sequence. Because a
 long IDR has no single fold, BC2 doesn't use the whole sequence at once:
-- `crop_fasta_sequence` (default `[10,40]`) sets the length of the sequence **window** sampled each
+- `crop_fasta_sequence` (default `[10,40]` - 10 is the minimum length of the window, 40 is the maximum length of residues) sets the length of the sequence **window** (a sub-stretch of the sequence) sampled each
   trajectory; different trajectories see different windows, so the campaign scans along the sequence.
   `false` uses the full sequence.
-- `idr_crop_count` (default 1) treats several windows as separate target states at once.
-- `validation_crop_flank` (default 5) restores up to five residues on each side of the window at
+- `idr_crop_count` (default 1) if greater than 1, treats the specified number of windows as separate target states at once.
+- `validation_crop_flank` (default 5) restores up to the specified number of residues on each side of the window at
   validation, so a design isn't leaning on the artificial cut ends; `min_target_crop_length_final`
   (metric `Target_Crop_Length`) requires enough coverage.
 - A FASTA target carries no residue numbers or backbone, so `hotspots`, `coldspots` and
@@ -80,7 +80,7 @@ its **magnitude** sets relative importance, and its **sign** sets the goal — a
 default, `1`) means *bind*, a **negative** weight means *avoid*. `"objective": "detarget"` is simply an
 explicit alias for a negative weight (BC2 forces the weight negative when you set it); `"objective":
 "target"` is the default. So the default target is **positive/binding**, and you detarget by making the
-weight negative (or setting `objective: "detarget"`).
+weight negative (or setting `objective: "detarget"`). You can find an example of this below and in `examples/pdl1_crossreactive_detarget.json`.
 - **Positive targets** (default) — the binder must bind **all** of them: one **cross-reactive /
   multi-specific** binder, each target's weight setting its pull in the shared objective (and the order
   of the per-target values in the result CSV cells). One binder is redesigned against all of them

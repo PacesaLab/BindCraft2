@@ -1,6 +1,6 @@
 # BC2 installation and running
 
-[First design](../../README.md#run-your-first-design) · [Settings](reference.md) · [Outputs and measurements](outputs.md) · [Examples](examples.md)
+First design (see "Run your first design" in your BindCraft2 repo's top-level README.md) · [Reference Documentation](reference.md) · [Outputs and Measurements](outputs.md) · [Examples](examples.md)
 
 [Install](#install) · [Check it](#check-the-installation) · [Weights and caches](#model-weights-and-caches) · [Run a campaign](#run-a-campaign) · [GPU and memory](#gpu-and-memory-controls) · [Clusters](#slurm-and-other-schedulers) · [Containers](#containers) · [No internet](#machines-with-no-route-to-the-internet) · [Troubleshooting](#troubleshooting)
 
@@ -125,7 +125,7 @@ bindcraft design examples/pdl1.json
 | `bindcraft archive` / `unarchive <folder>` | Zip or restore completed trajectory folders. |
 | `bindcraft fetch-weights` | Download and verify the checkpoints. |
 | `bindcraft design --list-targets`, `--list-modalities`, `--list-properties`, `--list-core` | Print the shipped preset names, one per line. |
-| `bindcraft design --list-settings` | Print every setting name `--set` accepts. The same names with their defaults are in [settings/core/reference.json](../settings/core/reference.json). |
+| `bindcraft design --list-settings` | Print every setting name `--set` accepts. The same names with their defaults are in `settings/core/reference.json` in your BindCraft2 repo. |
 
 `bindcraft design -h` names every shipped target, binder format and design property with a line of description each, and lists the settings changed most often with worked `--set` examples. `archive`, `unarchive` and `fetch-weights` each answer to `-h` with their own usage line and what they are for. See [settings](reference.md) for what each one changes and [outputs](outputs.md) for reading the results.
 
@@ -262,7 +262,7 @@ Check before spending a night on a campaign. The fan-out line a campaign prints 
 srun --environment=/path/to/bindcraft.toml python3 -c "import jax; print(jax.devices())"
 ```
 
-See [containers/README.md](../containers/README.md) for the build recipes in full.
+See `containers/README.md` in your BindCraft2 repo for the build recipes in full.
 
 ## Machines with no route to the internet
 

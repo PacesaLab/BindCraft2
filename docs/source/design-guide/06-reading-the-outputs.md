@@ -1,6 +1,6 @@
 # Reading the outputs
 
-[Full guide](../design-guide.md) · [Settings](../reference.md) · [Outputs](../outputs.md)
+[Design Overview](../design-guide.md) · [Reference Documentation](../reference.md) · [Outputs and Measurements](../outputs.md)
 
 A campaign folder has three numbered stage folders plus records:
 

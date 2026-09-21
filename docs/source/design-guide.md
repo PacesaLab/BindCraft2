@@ -20,7 +20,7 @@ has N or runs out of budget.
 
 ---
 
-## Table of contents
+## Table of Contents
 
 1. [How a campaign runs](#1-how-a-campaign-runs)
 2. [Setting up a design](#2-setting-up-a-design)
@@ -86,17 +86,30 @@ worked JSON examples, and how structured, disordered, and multi-target inputs ea
 
 ## 3. Choosing a modality
 
-The **modality** sets the binder format and conformational objective (`binder`, `large_binder`,
-`peptide`, `cyclic_peptide`, `homo_oligomer`, `multidomain`, `VHH`, `scFv`, `Fab`, `ARP`,
-`induced_fit`, `fold_switch`). When unsure, use the default `binder` — de novo miniproteins are the
-most reliable format. Otherwise match the binder's shape to the epitope's shape (flat surfaces want
-a larger de novo binder; grooves and pockets want an extended peptide or VHH CDR3), and expect
-antibody-format scaffolds to underperform de novo binders except when you specifically need that
-format.
+The **modality** sets the binder format and conformational objective, the optoins are: 
+- `binder`
+- `large_binder`
+- `peptide`
+- `cyclic_peptide`
+- `homo_oligomer`
+- `multidomain`
+- `VHH`
+- `scFv`
+- `Fab`
+- `ARP`
+- `induced_fit`
+- `fold_switch`
 
 See [Choosing a modality](design-guide/03-choosing-a-modality.md) for the full modality and
 application tables, the biophysical intuition behind each choice, where the antibody/ARP scaffold
 frameworks come from, and the VHH extended-vs-folded-back paratope option.
+
+
+When unsure, use the default `binder`, de novo miniproteins are the
+most reliable format. Otherwise match the binder's shape to the epitope's shape (flat surfaces want
+a larger de novo binder; grooves and pockets want an extended peptide or VHH CDR3), and expect
+antibody-format scaffolds to underperform compared to de novo binders except when you specifically need that
+format.
 
 ---
 
@@ -134,7 +147,7 @@ the `benchmark` reproducible profile, and when `bigbang` initialisation is worth
 
 ## 6. Reading the outputs
 
-A campaign folder has three numbered stage folders — `1_Trajectories/`, `2_Refolded/`, and
+The campaign output folder has three numbered stage folders — `1_Trajectories/`, `2_Refolded/`, and
 `3_Ranked/` — plus provenance records. **Open `3_Ranked/!_Ranked.csv` first**: it's the single,
 best-first-by-`i_pDAE` record of accepted designs. If it's empty, `2_Refolded/!_Refolded.csv`'s
 `failed_filters` column says why candidates were rejected. None of the confidence metrics
@@ -148,25 +161,81 @@ complete metrics table with ranges, directions and default thresholds.
 
 ## 7. What to look out for (common pitfalls)
 
-Prepare the target properly (strip unwanted waters/ligands, keep the biologically relevant
-assembly); hotspots are optional but steer where the binder lands; a great confidence score is a
-candidate to test, not a proven binder; watch the `autotuned` column for desperation-ladder designs;
-zero accepted designs is itself informative once you read `failed_filters`; custom antibody/ARP
-scaffolds need sequential (not Kabat) numbering; and a campaign resumes by default when rerun
-against the same folder.
+<details>
+<summary>Prepare the target.</summary>
 
-See [What to look out for](design-guide/07-common-pitfalls.md) for the full list.
+Strip waters/ligands you don't want, keep the biologically relevant assembly, and make sure the
+epitope you name is actually solvent-exposed in that structure. BC2 designs against what you give
+it, membrane and glycan context included or not.
+</details>
+
+<details>
+<summary>Hotspots are optional but steer the campaign.</summary>
+
+BC2 runs fine with none — it reads the whole surface and finds a site. Name 3–6 exposed residues
+when you care *where* the binder lands (a specific functional epitope, or a large target where you
+want to focus the budget); omit them to let it choose. If it binds but off-target, add
+`forced_targeting`.
+</details>
+
+<details>
+<summary>Even a great score isn't a binder.</summary>
+
+Treat the ranked list as *candidates to test*, not answers. Confidence metrics rank designs against
+each other; they do not predict wet-lab success.
+</details>
+
+<details>
+<summary>Watch the <code>autotuned</code> column.</summary>
+
+Designs accepted on the desperation ladder are weaker; a campaign that only produced them is
+telling you the task is too hard as posed.
+</details>
+
+<details>
+<summary>Zero accepted designs is information.</summary>
+
+Read `failed_filters` in `2_Refolded/!_Refolded.csv`. If everything fails `i_pTM`/`i_pAE`, the
+epitope may be undruggable or mis-chosen; if it fails `Unbound_Binder_pLDDT`, the binders bind but
+don't fold on their own (try a different length or modality).
+</details>
+
+<details>
+<summary>Custom antibody/ARP scaffolds need correct numbering.</summary>
+
+The engine rejects Kabat insertion codes — use the shipped scaffolds unless you have sequentially
+renumbered your own.
+</details>
+
+<details>
+<summary>Multi-target and detargeting.</summary>
+
+You can supply several targets (weighted) and mark off-targets with `"objective": "detarget"` to
+design for specificity; read the `_detarget` metrics as *avoidance*, not binding.
+</details>
+
+<details>
+<summary>Reproducibility.</summary>
+
+`campaign_seed` fixes the draws within one setup but does not guarantee identical numbers across
+machines/GPUs. A campaign **resumes by default** — rerun the same command against the same folder
+to continue it.
+</details>
 
 ---
 
 ## 8. A sensible first campaign
 
-Prepare your target, run a `binder`-modality smoke test at default lengths with a handful of
-designs and a few hundred trajectories, inspect `3_Ranked/!_Ranked.csv` (reading `failed_filters` if
-it's empty), then scale up `number_of_final_designs` and `max_trajectories` once designs appear at
-your requested settings — not on desperation rungs.
-
-See [A sensible first campaign](design-guide/08-first-campaign.md) for the full walkthrough.
+1. Prepare and inspect your target; decide whether to name hotspots (optional — name them to focus a
+   specific epitope, or leave them off to let BC2 find a site).
+2. Start with `"modality": "binder"` at its default lengths, a handful of designs and a few hundred
+   trajectories as a smoke test.
+3. Open `3_Ranked/!_Ranked.csv`. If it's empty, read `failed_filters` and adjust the epitope, length
+   or modality — not the loss weights.
+4. Once designs appear at your requested settings (not on desperation rungs), scale
+   `number_of_final_designs` and `max_trajectories` up for the real run.
+5. Rank/inspect the top designs, check the poses by eye, and order a diverse set — top `i_pDAE` is a
+   starting point, not a guarantee.
 
 For the exhaustive list of every setting and its default, see
 [`reference.md`](reference.md); for every output file and measurement, see

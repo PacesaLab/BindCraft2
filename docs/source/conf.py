@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'BindCraf2'
+project = 'BindCraft2'
 copyright = '2026, Martin Pacesa'
 author = 'Martin Pacesa'
 
@@ -16,6 +16,8 @@ author = 'Martin Pacesa'
 extensions = ["myst_parser",
               "sphinx_copybutton"
               ]
+
+myst_heading_anchors = 6
 
 templates_path = ['_templates']
 exclude_patterns = ["readme.md", "readmelink.md", "readme_link.rst"]
@@ -27,6 +29,7 @@ exclude_patterns = ["readme.md", "readmelink.md", "readme_link.rst"]
 
 html_theme = 'furo'
 html_static_path = ['_static']
+html_css_files = ['custom.css']
 
 html_theme_options = {
     "sidebar_hide_name":False,

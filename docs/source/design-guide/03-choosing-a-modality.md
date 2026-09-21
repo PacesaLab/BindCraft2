@@ -1,24 +1,24 @@
 # Choosing a modality
 
-[Full guide](../design-guide.md) · [Settings](../reference.md) · [Outputs](../outputs.md)
+[Design Overview](../design-guide.md) · [Reference Documentation](../reference.md) · [Outputs and Measurements](../outputs.md)
 
 The **modality** sets the binder format and the conformational objective. Name it with `"modality":
 "..."` (or `--modality`). You can combine some, e.g. `["VHH", "induced_fit"]`.
 
-| Modality | What it makes | Choose it when |
-| --- | --- | --- |
-| `binder` | A de novo miniprotein, ~60–180 residues, folded from nothing | The default and most reliable. General de novo binder against a structured epitope. |
-| `large_binder` | A longer de novo binder (~250–600 residues) with extended optimisation | Chiefly to add **mass to a small target for cryo-EM / structural biology**; also for large or flat epitopes that need more interface. **Name `binder_lengths`** (see `bigbang` in [Desperation and autotuning](05-desperation-and-autotuning.md) for large complexes). |
-| `peptide` | A 12–25 residue linear peptide, judged bound without a free fold | A short linear peptide into a **groove or pocket** — not a flat surface (see intuition below). |
-| `cyclic_peptide` | A 6–16 residue head-to-tail cyclic peptide | Cyclic peptide binders; the ring pre-pays part of the binding entropy. Read `Cyclic_Closure_Distance`. |
-| `homo_oligomer` | Identical copies of one 40–120 residue chain (lengths are per copy) | A symmetric homo-oligomeric binder — and the natural choice for a **symmetric target** (e.g. homotrimeric TNFα) a single-chain binder struggles with. Set `copies`. |
-| `multidomain` | Two domains on one 120–300 residue chain | A two-domain binder with separation/linker objectives. |
-| `VHH` | Single-domain antibody scaffold, editable CDRs; samples extended and folded-back CDR3 | Single-domain antibody (VHH) format (see conformation note below). |
-| `scFv` | Heavy + light variable domains as two chains, no linker designed | scFv-format binders. |
-| `Fab` | Heavy + light chains, editable variable domains, constant body kept off the target | Fab-format binders. |
-| `ARP` | Ankyrin Repeat protein — a consensus ankyrin-repeat scaffold with editable repeat positions | Ankyrin-repeat (ARP) binders. |
-| `induced_fit` | The interface moves ≥5 Å between the free and bound prediction | The binder should change shape on binding. |
-| `fold_switch` | The whole fold differs free vs bound (TM-score ≤ 0.6) | You explicitly want a fold-switching binder. |
+| Modality | What it makes | Choose it when | Typical applications |
+| --- | --- | --- | --- |
+| `binder` | A de novo miniprotein, ~60–180 residues, folded from nothing | The default and most reliable. General de novo binder against a structured epitope. | The general-purpose choice: research reagents and pulldowns, biosensors, crystallisation/cryo-EM fiducials, therapeutic-lead and targeting domains. Most reliable to fold and bind. |
+| `large_binder` | A longer de novo binder (~250–600 residues) with extended optimisation | Chiefly to add **mass to a small target for cryo-EM / structural biology**; also for large or flat epitopes that need more interface. **Name `binder_lengths`** (see `bigbang` in [Desperation and autotuning](05-desperation-and-autotuning.md) for large complexes). | Primarily a **structural-biology tool**: a rigid binder adds **mass and recognisable features to a small target for cryo-EM** (and can act as a crystallisation chaperone), making an otherwise too-small particle tractable. Secondarily, big or flat epitopes that need more buried area, higher-avidity single chains, and longer fusion/scaffolding domains. |
+| `peptide` | A 12–25 residue linear peptide, judged bound without a free fold | A short linear peptide into a **groove or pocket** — not a flat surface (see intuition below). | Inhibitors that thread a **groove or cleft** (protein–protein interfaces with a linear hotspot, active-site channels), tool compounds and targeting peptides. Poor on flat surfaces. |
+| `cyclic_peptide` | A 6–16 residue head-to-tail cyclic peptide | Cyclic peptide binders; the ring pre-pays part of the binding entropy. Read `Cyclic_Closure_Distance`. | Macrocycle-style binders wanting protease resistance and rigidity; the ring's lower entropy makes it a better peptide binder than a linear one of the same length. |
+| `homo_oligomer` | Identical copies of one 40–120 residue chain (lengths are per copy) | A symmetric homo-oligomeric binder — and the natural choice for a **symmetric target** (e.g. homotrimeric TNFα) a single-chain binder struggles with. Set `copies`. | Symmetric, multivalent binders — avidity, receptor **clustering/agonism**, and self-assembling building blocks. Especially good for **symmetric targets** that a monomeric binder handles poorly (e.g. homotrimeric **TNFα**): a matched Cₙ oligomer can engage every protomer of the symmetric target at once. |
+| `multidomain` | Two domains on one 120–300 residue chain | A two-domain binder with separation/linker objectives. | Single-chain **biparatopic/bispecific** reach across two epitopes (or two targets), and larger, higher-avidity architectures. |
+| `VHH` | Single-domain antibody scaffold, editable CDRs; samples extended and folded-back CDR3 | Single-domain antibody (VHH) format (see conformation note below). | Single-domain antibodies for **concave/cryptic epitopes and enzyme active sites**, intrabodies, crystallisation chaperones, imaging, and modular fusion building blocks. |
+| `scFv` | Heavy + light variable domains as two chains, no linker designed | scFv-format binders. | Variable-fragment format for **CAR-T binding domains** and bispecific/multispecific building blocks — when the downstream construct needs an scFv specifically. Least stable of the antibody formats. |
+| `Fab` | Heavy + light chains, editable variable domains, constant body kept off the target | Fab-format binders. | The classic therapeutic/diagnostic antibody fragment: more stable and manufacturable than an scFv, and the base the scFv here is derived from. |
+| `ARP` | Ankyrin Repeat protein — a consensus ankyrin-repeat scaffold with editable repeat positions | Ankyrin-repeat (ARP) binders. | Ankyrin Repeat protein — non-antibody, disulfide-free, high-stability scaffold: cheap microbial production, intracellular use, and easy multivalent fusions. |
+| `induced_fit` | The interface moves ≥5 Å between the free and bound prediction | The binder should change shape on binding. | Binders for targets that **change shape on binding** (conformational selection), and allosteric or state-selective binders. |
+| `fold_switch` | The whole fold differs free vs bound (TM-score ≤ 0.6) | You explicitly want a fold-switching binder. | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
 
 ## How to choose — biophysical intuition
 
@@ -44,23 +44,6 @@ The **modality** sets the binder format and the conformational objective. Name i
 - **`induced_fit`/`fold_switch` are objectives, not formats.** They build on the de novo `binder` base
   and *require* the fold to move on binding. Use them only when that change is the goal; for a rigid
   binder they just make the task harder.
-
-## What each modality is for
-
-| Modality | Typical applications |
-| --- | --- |
-| `binder` | The general-purpose choice: research reagents and pulldowns, biosensors, crystallisation/cryo-EM fiducials, therapeutic-lead and targeting domains. Most reliable to fold and bind. |
-| `large_binder` | Primarily a **structural-biology tool**: a rigid binder adds **mass and recognisable features to a small target for cryo-EM** (and can act as a crystallisation chaperone), making an otherwise too-small particle tractable. Secondarily, big or flat epitopes that need more buried area, higher-avidity single chains, and longer fusion/scaffolding domains. |
-| `peptide` | Inhibitors that thread a **groove or cleft** (protein–protein interfaces with a linear hotspot, active-site channels), tool compounds and targeting peptides. Poor on flat surfaces. |
-| `cyclic_peptide` | Macrocycle-style binders wanting protease resistance and rigidity; the ring's lower entropy makes it a better peptide binder than a linear one of the same length. |
-| `homo_oligomer` | Symmetric, multivalent binders — avidity, receptor **clustering/agonism**, and self-assembling building blocks. Especially good for **symmetric targets** that a monomeric binder handles poorly (e.g. homotrimeric **TNFα**): a matched Cₙ oligomer can engage every protomer of the symmetric target at once. |
-| `multidomain` | Single-chain **biparatopic/bispecific** reach across two epitopes (or two targets), and larger, higher-avidity architectures. |
-| `VHH` | Single-domain antibodies for **concave/cryptic epitopes and enzyme active sites**, intrabodies, crystallisation chaperones, imaging, and modular fusion building blocks. |
-| `scFv` | Variable-fragment format for **CAR-T binding domains** and bispecific/multispecific building blocks — when the downstream construct needs an scFv specifically. Least stable of the antibody formats. |
-| `Fab` | The classic therapeutic/diagnostic antibody fragment: more stable and manufacturable than an scFv, and the base the scFv here is derived from. |
-| `ARP` | Ankyrin Repeat protein — non-antibody, disulfide-free, high-stability scaffold: cheap microbial production, intracellular use, and easy multivalent fusions. |
-| `induced_fit` | Binders for targets that **change shape on binding** (conformational selection), and allosteric or state-selective binders. |
-| `fold_switch` | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
 
 ## Default scaffolds — where they come from
 

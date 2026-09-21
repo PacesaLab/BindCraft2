@@ -1,6 +1,6 @@
 # BC2 settings reference
 
-[First design](../../README.md#run-your-first-design) · [Installation and running](installation.md) · [Outputs and measurements](outputs.md) · [Examples](examples.md)
+[Installation and running](installation.md) · [Outputs and Measurements](outputs.md) · [Examples](examples.md)
 
 [Inputs](#input-tiers-and-overrides) · [Every setting](#every-setting-at-its-default) · [Targets and scaffolds](#define-the-target-and-binder) · [Stages](#design-stages-and-acceptance) · [Models](#models-and-sequence-redesign) · [Biological options](#biological-options) · [Losses](#losses) · [Filters](#filters) · [Autotuning](#autotuning-and-parameter-sweeps) · [Files and resources](#output-and-execution-settings)
 
@@ -15,16 +15,16 @@ bindcraft design --help
 
 | Applied in order | What you supply | Purpose |
 | --- | --- | --- |
-| Core | Nothing | The baseline every campaign starts from, always loaded, in [settings/core/default.json](../settings/core/default.json). |
-| Core profile | `"core": "benchmark"`, or `--core benchmark` | An opt-in profile beside the baseline, from [settings/core/](../settings/core/). |
-| Modality | `"modality": "binder"` or a list such as `["VHH", "induced_fit"]` | Binder format and conformational objective; see [modality choices](../../README.md#design-modalities). |
+| Core | Nothing | The baseline every campaign starts from, always loaded, in `settings/core/default.json` in your BindCraft2 repo. |
+| Core profile | `"core": "benchmark"`, or `--core benchmark` | An opt-in profile beside the baseline, from the `settings/core/` directory in your BindCraft2 repo. |
+| Modality | `"modality": "binder"` or a list such as `["VHH", "induced_fit"]` | Binder format and conformational objective; see "Design modalities" in your BindCraft2 repo's top-level README.md. |
 | Properties | Top-level booleans such as `"humanize": true` | Optional biological properties and starting conformations. |
-| Target | `"target": "hPDL1"` or `"target": ["hPDL1", "mPDL1"]` | Shipped structures and binding-site selections from [target presets](../settings/target/). |
+| Target | `"target": "hPDL1"` or `"target": ["hPDL1", "mPDL1"]` | Shipped structures and binding-site selections from the `settings/target/` directory in your BindCraft2 repo. |
 | Campaign | Your other JSON entries | Requested designs, output location and explicit adjustments. |
 
-Each layer overrides the ones above it in the table. A target therefore wins over the modality and property defaults it is combined with, the campaign file wins over every preset, and [settings/core/default.json](../settings/core/default.json) is the floor under all of them. Command-line choices override matching entries in the campaign file. Nested objects merge by key; lists replace earlier lists. Several named target presets accumulate their target entries, but an explicit `targets` list replaces them. Modalities apply in the order named; properties apply in alphabetical name order.
+Each layer overrides the ones above it in the table. A target therefore wins over the modality and property defaults it is combined with, the campaign file wins over every preset, and `settings/core/default.json` in your BindCraft2 repo is the floor under all of them. Command-line choices override matching entries in the campaign file. Nested objects merge by key; lists replace earlier lists. Several named target presets accumulate their target entries, but an explicit `targets` list replaces them. Modalities apply in the order named; properties apply in alphabetical name order.
 
-`"core": "benchmark"`, or `--core benchmark`, applies a profile from [settings/core/](../settings/core/) under every preset, so a modality or target still refines it. `benchmark.json` sets `campaign_seed` to 0, `autotune` to false and `desperation` to false, which is the profile to use when one change is being compared against another. `default` and `reference` are not profiles to name.
+`"core": "benchmark"`, or `--core benchmark`, applies a profile from the `settings/core/` directory in your BindCraft2 repo under every preset, so a modality or target still refines it. `benchmark.json` sets `campaign_seed` to 0, `autotune` to false and `desperation` to false, which is the profile to use when one change is being compared against another. `default` and `reference` are not profiles to name.
 
 `--modality VHH` replaces the file's modality. Repeat it or use commas to combine modalities. Property flags use hyphens (`--termini-accessible`); JSON uses underscores (`"termini_accessible": true`). `--set 'filters.i_pTM.threshold=0.8'` changes a nested value. Explicit `--set` assignments take precedence over the shorthand flags. Names are case-sensitive.
 
@@ -32,7 +32,7 @@ Each layer overrides the ones above it in the table. A target therefore wins ove
 
 ### Every setting at its default
 
-[settings/core/reference.json](../settings/core/reference.json) is the catalogue of all 235 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in [settings/core/default.json](../settings/core/default.json), and change one campaign in its own JSON or with `--set`.
+`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 235 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
 
 ### Paths
 
@@ -422,7 +422,7 @@ The autotuner reviews blocks of ten trajectories and moves two things only: the 
 
 The initial guess and the flexibility are tried alone before they are tried together, so a rung that works says which change bought the design. Rungs 4 to 6 move validation off the held-back monomer models onto held-out multimer models, splitting the multimer pool 3 to design and 2 to validate, for a target whose interface the monomer models cannot resolve. More recycles come last because they cost only time; a campaign that already asks for more than three keeps its own count. The rung is read off the campaign's own tables, so every worker and a resumed campaign stand on the same one, and a `trajectory_only` campaign never climbs at all.
 
-**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the initial guess reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see [benchmark.json](../settings/core/benchmark.json) and [input tiers](#input-tiers-and-overrides).
+**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the initial guess reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
 
 ```json
 {

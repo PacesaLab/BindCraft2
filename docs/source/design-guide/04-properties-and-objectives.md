@@ -1,6 +1,6 @@
 # Helpful properties and objectives
 
-[Full guide](../design-guide.md) · [Settings](../reference.md) · [Outputs](../outputs.md)
+[Design Overview](../design-guide.md) · [Reference Documentation](../reference.md) · [Outputs and Measurements](../outputs.md)
 
 **Properties** are optional booleans (`"humanize": true`, or `--humanize`) that add a biological
 objective and its associated filters. They stack on top of a modality.

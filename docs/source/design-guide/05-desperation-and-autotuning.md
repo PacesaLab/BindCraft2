@@ -1,6 +1,6 @@
 # Desperation and autotuning (what runs on its own)
 
-[Full guide](../design-guide.md) · [Settings](../reference.md) · [Outputs](../outputs.md)
+[Design Overview](../design-guide.md) · [Reference Documentation](../reference.md) · [Outputs and Measurements](../outputs.md)
 
 BC2 adapts a stalled campaign automatically. Two separate mechanisms:
 
@@ -25,15 +25,17 @@ Harmless; leave it on.
 
 The ladder is dropped the moment a design is accepted.
 
-> ⚠️ **Every rung of the ladder raises the expected false-positive rate.** A design accepted on a
-> higher rung was accepted against an *easier* design task and judged by a *looser* validation, so it
-> is more likely to fail in the wet lab than one accepted at your requested settings — the filters
-> passing does **not** mean the experiment will. The campaign log prints a `desperation:` line naming
-> the rung, and the trajectory's `autotuned` column (`target_flexibility`, `initial_guess`,
-> `multimer`, raised `design_recycles`) records how far down the ladder it was accepted. Weight each
-> design by that, order more replicates of ladder-accepted ones, and if a whole campaign only produced
-> rung-6/7 designs, the target/epitope is probably too hard as posed — revisit the epitope or the
-> length rather than trusting the output.
+```{important}
+**Every rung of the ladder raises the expected false-positive rate.** A design accepted on a
+higher rung was accepted against an *easier* design task and judged by a *looser* validation, so it
+is more likely to fail in the wet lab than one accepted at your requested settings — the filters
+passing does **not** mean the experiment will. The campaign log prints a `desperation:` line naming
+the rung, and the trajectory's `autotuned` column (`target_flexibility`, `initial_guess`,
+`multimer`, raised `design_recycles`) records how far down the ladder it was accepted. Weight each
+design by that, order more replicates of ladder-accepted ones, and if a whole campaign only produced
+rung-6/7 designs, the target/epitope is probably too hard as posed — revisit the epitope or the
+length rather than trusting the output.
+```
 
 The `benchmark` core profile (`"core": "benchmark"`) sets a fixed `campaign_seed` and turns
 `autotune` and `desperation` off, for a run you can reproduce.
