@@ -16,7 +16,7 @@ On Linux, start in a terminal without an active Python or Conda environment:
 
 ```bash
 git clone https://github.com/PacesaLab/BindCraft2.git
-cd BC2
+cd BindCraft2
 bash install.sh
 source .venv/bin/activate
 ```
