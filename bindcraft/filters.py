@@ -232,7 +232,16 @@ def residue_solvent_accessible_area(protein_complex: dict[str, Protein], chains:
     atom_array = build_atom_array(protein_complex)
     if atom_array is None:
         return None
-    per_atom_area = struc.sasa(atom_array, probe_radius=1.4, point_number=SASA_PROBE_POINTS)
+    try:
+        per_atom_area = struc.sasa(atom_array, probe_radius=1.4, point_number=SASA_PROBE_POINTS)
+    except KeyError:
+        # ProtOr radii are keyed by (residue, atom) and raise on any pair the table does not carry, so
+        # a single atom a residue should not have -- a redesigned serine holding a CG, say -- takes the
+        # whole design worker down mid-campaign. Element radii cover every atom, and differ from ProtOr
+        # by around a percent on well-formed residues, so the metric degrades slightly here rather than
+        # the campaign ending on one malformed side chain.
+        per_atom_area = struc.sasa(atom_array, probe_radius=1.4, point_number=SASA_PROBE_POINTS,
+                                   vdw_radii='Single')
     per_residue_area = struc.apply_residue_wise(atom_array, np.nan_to_num(per_atom_area), np.sum)
     if chains is None:
         return per_residue_area
