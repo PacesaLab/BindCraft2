@@ -182,12 +182,12 @@ def protein_state_shapes(protein_states: ProteinStates) -> tuple[tuple[str, tupl
 
 MONOMER_CHAIN_GAP = 49
 
-def monomer_chain_break_indices(chain_lengths: tuple[int, ...]) -> Array:
-    chain_starts, next_start = ([], 0)
-    for chain_length in chain_lengths:
-        chain_starts.append(next_start)
-        next_start += chain_length + MONOMER_CHAIN_GAP
-    return jnp.concatenate([jnp.arange(chain_start, chain_start + chain_length, dtype=jnp.int32) for chain_start, chain_length in zip(chain_starts, chain_lengths)])
+def monomer_chain_break_indices(chain_lengths: tuple[int, ...], residue_index: Array) -> Array:
+    # Preserve internal receptor breaks; only replace jumps between top-level chains.
+    steps = jnp.concatenate([jnp.zeros((1,), dtype=jnp.int32), jnp.diff(residue_index)])
+    chain_starts = jnp.cumsum(jnp.asarray(chain_lengths[:-1], dtype=jnp.int32))
+    steps = steps.at[chain_starts].set(MONOMER_CHAIN_GAP + 1)
+    return jnp.cumsum(steps)
 
 def alphafold_model_family(model_name: str) -> tuple:
     if 'multimer' in model_name:
@@ -300,7 +300,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         entity_id = residue_entity_ids(chain_names, chain_lengths, self.multi_chain_binders)
         interface_asym_id = interface_asym_ids(chain_names, chain_lengths)
         if self.model_families[model][0] == 'monomer' and len(chain_names) > 1:
-            residue_index = monomer_chain_break_indices(chain_lengths)
+            residue_index = monomer_chain_break_indices(chain_lengths, residue_index)
         seq_mask = real_residue_weights(flags)
         if padding_length:
             sequence = jnp.pad(sequence, [[0, padding_length], [0, 0]])
