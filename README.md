@@ -15,7 +15,7 @@ BC2 combines sequence optimisation through AlphaFold 2 with ProteinMPNN redesign
 On Linux, start in a terminal without an active Python or Conda environment:
 
 ```bash
-git clone https://github.com/PacesaLab/BC2.git
+git clone https://github.com/PacesaLab/BindCraft2.git
 cd BC2
 bash install.sh
 source .venv/bin/activate
