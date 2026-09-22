@@ -21,9 +21,12 @@ done
 
 if [[ -z $accelerator ]]; then
   # nvidia-smi reports the newest CUDA its driver serves, which is what the jax wheels are built for.
+  # Its banner labels that "CUDA Version" on older drivers and "CUDA UMD Version" on newer ones, so
+  # both spellings are matched: missing the label reads as no driver at all, and a machine holding a
+  # working card is then told its GPU is presumed to belong to its job.
   # A machine with no driver at all has no nvidia-smi, and under pipefail that is a failed pipeline
   # rather than an empty answer, so every reading of it ends in a truth this script can act on.
-  cuda_major=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9][0-9]*\).*/\1/p' | head -1 || true)
+  cuda_major=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA[A-Z ]*Version: *\([0-9][0-9]*\).*/\1/p' | head -1 || true)
   case "${cuda_major:-none}" in
     13|14) accelerator=cuda13 ;;
     12) accelerator=cuda12 ;;
