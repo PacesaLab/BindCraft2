@@ -9,7 +9,7 @@ BC2 needs Linux, Python 3.12 or newer and an NVIDIA GPU. One command installs it
 ## Install
 
 ```bash
-git clone https://github.com/PacesaLab/BC2.git
+git clone https://github.com/PacesaLab/BindCraft2.git
 cd BC2
 bash install.sh
 source .venv/bin/activate
