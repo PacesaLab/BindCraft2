@@ -45,7 +45,7 @@ gradient descent so the predicted complex looks like a good binder. This happens
 — `screen → refine → anneal → harden → mutate` — that move from soft, exploratory sequences to a
 hard, single amino-acid sequence. Each stage has a confidence floor; a trajectory that can't meet it
 is dropped early. The structure the trajectory ends on is the *hallucinated* binder — it is **not**
-yet a real prediction, because AlphaFold was being pushed toward it.
+yet a real prediction.
 
 **2. Redesign (ProteinMPNN).** The hallucinated backbone is handed to ProteinMPNN, which draws
 several new sequences for it (default 10 candidates). This washes out AlphaFold-specific sequence
@@ -67,7 +67,7 @@ Design-time metrics (from stage 1) are optimistic by construction. **Trust the v
 ## 2. Setting up a design
 
 A campaign is a small JSON file naming at minimum
-- a target (PDB, mmCIF, FASTA, or wighted list of targets)
+- a target (PDB, mmCIF, FASTA, or weighted list of targets)
 - a binder length range
 - how many designs you want
 You can run it with `bindcraft design <my_campaign.json>`. 
