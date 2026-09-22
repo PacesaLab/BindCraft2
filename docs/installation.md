@@ -9,13 +9,13 @@ BC2 needs Linux, Python 3.12 or newer and an NVIDIA GPU. One command installs it
 ## Install
 
 ```bash
-git clone https://github.com/PacesaLab/BC2.git
-cd BC2
+git clone https://github.com/PacesaLab/BindCraft2.git
+cd BindCraft2
 bash install.sh
 source .venv/bin/activate
 ```
 
-`install.sh` builds `.venv` beside the repository when no environment is active, installs BC2 and its accelerator wheels, downloads the AlphaFold parameters and then verifies the result. **The install is editable, so the clone is the installation**: moving, renaming or deleting the BC2 directory breaks the `bindcraft` command. Clone it somewhere permanent, not into a scratch directory that gets purged. Re-running `bash install.sh` is safe, reuses an existing `.venv`, does not download the parameters again, and is how you switch accelerator. Activate `.venv` once per terminal. Allow about 20 GB of free space: the 5.3 GB parameter archive and its unpacked contents sit side by side during the transfer before the archive is deleted, the accelerator wheels are several GB more, and results accumulate beside them.
+`install.sh` builds `.venv` beside the repository when no environment is active, installs BC2 and its accelerator wheels, downloads the AlphaFold parameters and then verifies the result. **The install is editable, so the clone is the installation**: moving, renaming or deleting the `BindCraft2` directory breaks the `bindcraft` command. Clone it somewhere permanent, not into a scratch directory that gets purged. Re-running `bash install.sh` is safe, reuses an existing `.venv`, does not download the parameters again, and is how you switch accelerator. Activate `.venv` once per terminal. Allow about 20 GB of free space: the 5.3 GB parameter archive and its unpacked contents sit side by side during the transfer before the archive is deleted, the accelerator wheels are several GB more, and results accumulate beside them.
 
 | Your machine | What to run |
 | --- | --- |
