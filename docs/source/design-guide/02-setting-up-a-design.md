@@ -67,7 +67,7 @@ long IDR has no single fold, BC2 doesn't use the whole sequence at once:
 - `crop_fasta_sequence` (default `[10,40]` - 10 is the minimum length of the window, 40 is the maximum length of residues) sets the length of the sequence **window** (a sub-stretch of the sequence) sampled each
   trajectory; different trajectories see different windows, so the campaign scans along the sequence.
   `false` uses the full sequence.
-- `idr_crop_count` (default 1) if greater than 1, treats the specified number of windows as separate target states at once.
+- `idr_crop_count` (default 1) if greater than 1, treats the specified number of crops as separate target states to bind.
 - `validation_crop_flank` (default 5) restores up to the specified number of residues on each side of the window at
   validation, so a design isn't leaning on the artificial cut ends; `min_target_crop_length_final`
   (metric `Target_Crop_Length`) requires enough coverage.
