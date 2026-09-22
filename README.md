@@ -21,7 +21,7 @@ bash install.sh
 source .venv/bin/activate
 ```
 
-In a new terminal, return to `BC2` and run `source .venv/bin/activate` again. See the [installation and running guide](docs/installation.md) for existing environments, older GPUs, clusters, containers and troubleshooting.
+In a new terminal, return to `BindCraft2` and run `source .venv/bin/activate` again. See the [installation and running guide](docs/installation.md) for existing environments, older GPUs, clusters, containers and troubleshooting.
 
 ## Run your first design
 
@@ -63,7 +63,7 @@ Change `target.pdb` and `A` to match your structure, then choose your binder len
 
 - **Length:** `[80, 80]` requests exactly 80 residues; `[60, 100]` allows any length in that range. For a scaffolded format such as `VHH`, remove `binder_lengths` and change `modality`; the scaffold determines the length.
 - **Binding site:** add `"hotspots": "54,56,66-70"` inside the target entry, using residue numbers from your structure.
-- **Output:** `project_folder` names the results folder. Launching this example from `BC2` writes to `BC2/results/my_target/`. Give each experiment its own folder.
+- **Output:** `project_folder` names the results folder. Launching this example from `BindCraft2` writes to `BindCraft2/results/my_target/`. Give each experiment its own folder.
 
 For a shipped target, replace the `targets` entry with `"target": "hPDL1"`. List the available targets with `bindcraft design --list-targets`.
 
