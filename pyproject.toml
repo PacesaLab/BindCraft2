@@ -1,6 +1,6 @@
 [project]
 name = "bindcraft"
-version = "1.0.0"
+version = "1.0.1"
 requires-python = ">=3.12"
 dependencies = [
     "jax>=0.11,<0.12",

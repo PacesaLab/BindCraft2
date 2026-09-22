@@ -15,8 +15,8 @@ BC2 combines sequence optimisation through [AlphaFold 2](https://www.nature.com/
 On Linux, start in a terminal without an active Python or Conda environment:
 
 ```bash
-git clone https://github.com/PacesaLab/BC2.git
-cd BC2
+git clone https://github.com/PacesaLab/BindCraft2.git
+cd BindCraft2
 bash install.sh
 source .venv/bin/activate
 ```

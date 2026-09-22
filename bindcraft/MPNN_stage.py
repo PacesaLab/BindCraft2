@@ -8,7 +8,7 @@ from bindcraft.filters import binder_assembly_sequence, binder_chain_sequences, 
 from bindcraft.loss import align_binder_coordinates, binder_copy_chains, chain_atom_coordinates, chain_residue_slices, multidomain_linker_residues
 from bindcraft.protein import StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, has_resolved_atom, superposed_on_binder, write_structure, BINDER_ALONE
 from bindcraft.campaign_log import candidate_outcome, redesigns_kept, exhausted_redesign_window
-from bindcraft.campaign_output import CampaignProgress, RANKING_METRIC, REFOLD_STAGE, accepted_state_suffixes, append_campaign_metrics, ranking_value, redesigned_sequence, stage_folder, target_ordered_row, timing_stamp, weighted_target_order
+from bindcraft.campaign_output import CampaignProgress, RANKING_METRIC, REFOLD_STAGE, accepted_state_suffixes, append_campaign_metrics, ranking_value, redesigned_sequence, stage_folder, structure_metadata, target_ordered_row, timing_stamp, weighted_target_order
 from bindcraft.protein_preparation import frame_holding_target, receptor_chain_layouts, states_holding_the_frame
 from bindcraft.settings import BinderDesignSettings, DEFAULT_SETTINGS
 
@@ -215,7 +215,7 @@ def write_refolded_candidate(refold_folder: str, candidate: str, predictions: St
     if failed_filters and not settings.get('save_failed_refolds', DEFAULT_SETTINGS['save_failed_refolds']):
         return None
     prediction = predictions[prediction_state]
-    metadata = {'design': candidate, 'outcome': 'rejected' if failed_filters else 'passed', **({'failed_filters': ','.join(failed_filters)} if failed_filters else {})}
+    metadata = structure_metadata('', {}, **{'design': candidate, 'outcome': 'rejected' if failed_filters else 'passed', **({'failed_filters': ','.join(failed_filters)} if failed_filters else {})})
     state_suffixes = accepted_state_suffixes(design_settings.prepared_states, predictions) if design_settings else {}
     #a target that does not hold its own frame is superposed on the binder, so the targets can be read against each other
     framed_states = states_holding_the_frame({name: state for name, state in protein_states.items() if name != BINDER_ALONE}, frame_holding_target(design_settings), design_settings.target_chain_prefix) if design_settings and protein_states else set(predictions)
