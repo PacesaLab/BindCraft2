@@ -1,28 +1,28 @@
-# BC2 installation and running
+# BindCraft2 installation and running
 
 First design (see "Run your first design" in your BindCraft2 repo's top-level README.md) · [Reference Documentation](reference.md) · [Outputs and Measurements](outputs.md) · [Examples](examples.md)
 
 [Install](#install) · [Check it](#check-the-installation) · [Weights and caches](#model-weights-and-caches) · [Run a campaign](#run-a-campaign) · [GPU and memory](#gpu-and-memory-controls) · [Clusters](#slurm-and-other-schedulers) · [Containers](#containers) · [No internet](#machines-with-no-route-to-the-internet) · [Troubleshooting](#troubleshooting)
 
-BC2 needs Linux, Python 3.12 or newer and an NVIDIA GPU. One command installs it on a workstation, a login node or inside a container, and chooses the accelerator wheels for the card it finds. **There is no CPU installation**: a single trajectory folds an AlphaFold ensemble hundreds of times, which is days of processor for an hour of card, so `bash install.sh cpu` is refused rather than quietly built.
+BindCraft2 needs Linux, Python 3.12 or newer and a GPU. One command installs it on a workstation, a login node or inside a container, and chooses the accelerator wheels for the card it finds. **There is no CPU installation**: a single trajectory folds an AlphaFold ensemble hundreds of times, which is days of processor for an hour of card, so `bash install.sh cpu` is refused rather than quietly built.
 
 ## Install
 
 ```bash
-git clone https://github.com/PacesaLab/BC2.git
-cd BC2
+git clone https://github.com/PacesaLab/BindCraft2.git
+cd BindCraft2
 bash install.sh
 source .venv/bin/activate
 ```
 
-`install.sh` builds `.venv` beside the repository when no environment is active, installs BC2 and its accelerator wheels, downloads the AlphaFold parameters and then verifies the result. **The install is editable, so the clone is the installation**: moving, renaming or deleting the BC2 directory breaks the `bindcraft` command. Clone it somewhere permanent, not into a scratch directory that gets purged. Re-running `bash install.sh` is safe, reuses an existing `.venv`, does not download the parameters again, and is how you switch accelerator. Activate `.venv` once per terminal. Allow about 20 GB of free space: the 5.3 GB parameter archive and its unpacked contents sit side by side during the transfer before the archive is deleted, the accelerator wheels are several GB more, and results accumulate beside them.
+`install.sh` builds `.venv` beside the repository when no environment is active, installs BindCraft2 and its accelerator wheels, downloads the AlphaFold parameters and then verifies the result. **The install is editable, so the clone is the installation**: moving, renaming or deleting the BindCraft2 directory breaks the `bindcraft` command. Clone it somewhere permanent, not into a scratch directory that gets purged. Re-running `bash install.sh` is safe, reuses an existing `.venv`, does not download the parameters again, and is how you switch accelerator. Activate `.venv` once per terminal. Allow about 20 GB of free space: the 5.3 GB parameter archive and its unpacked contents sit side by side during the transfer before the archive is deleted, the accelerator wheels are several GB more, and results accumulate beside them.
 
 | Your machine | What to run |
 | --- | --- |
 | GPU workstation | `bash install.sh` |
 | Cluster login node with no visible GPU | `bash install.sh`, which assumes CUDA 13 for the card your job will get |
 | Compute nodes with V100 or older cards | `bash install.sh cuda12` from the login node |
-| AMD or Intel accelerators | `bash install.sh rocm` or `bash install.sh oneapi` |
+| AMD | `bash install.sh rocm` |
 | A Conda or virtual environment you want to keep using | activate it first, then `bash install.sh` |
 | No route to the internet from the compute nodes | `bash install.sh`, then see [machines with no route to the internet](#machines-with-no-route-to-the-internet) |
 | No usable Python at all | `bash install.sh`, which fetches `uv` and brings its own interpreter |
@@ -35,7 +35,6 @@ source .venv/bin/activate
 | `cuda13` | CUDA 13 wheels; needs compute capability 7.5 or newer. |
 | `cuda12` | CUDA 12 wheels; the choice for Volta, Pascal and Maxwell cards. |
 | `rocm` | AMD accelerators, against a local ROCm 7 installation. |
-| `oneapi` | Intel accelerators. |
 | `--no-weights` | Skip the one-time AlphaFold download; run `bindcraft fetch-weights` later. |
 
 Automatic selection reads the CUDA version `nvidia-smi` reports, then the oldest visible card's compute capability. A driver serving CUDA 13 or 14 selects `cuda13`, a driver serving 12 selects `cuda12`, and a card below compute capability 7.5 moves the choice back to `cuda12` however new the driver is. **A machine with no driver selects `cuda13` and says so**, which is the ordinary case on a login node where the card belongs to the job rather than to the machine doing the installing. It never falls back to CPU wheels. A driver older than CUDA 12 reads the same way and prints the same line, because only 12, 13 and 14 are matched, so name `cuda12` yourself on such a machine.
@@ -47,8 +46,11 @@ Match the choice to the **compute** nodes, not the login node. If they differ, n
 An active virtual or Conda environment on Python 3.12 or newer is installed into directly, and `.venv` is not created.
 
 ```bash
-conda create -n bc2 'python>=3.12' pip -y
-conda activate bc2
+# Activate conda environment substitute env-name to your actual environment name
+conda activate your-env-name
+# OR activate your virtual environment
+source /path/to/your-environment/bin/activate
+# Install bindcraft
 bash install.sh
 ```
 
@@ -84,11 +86,19 @@ python -m bindcraft.selfcheck cuda13 --shipped-only   # ask only about the check
 | Checkpoints | Size | Where they come from |
 | --- | --- | --- |
 | ProteinMPNN, all three variants | 6.6 MB each | Inside the package. Nothing to download. |
-| AlphaFold parameters | 5.3 GB once | Downloaded to `~/.cache/bindcraft/alphafold` on first use. A campaign needs seven of the models the archive holds. |
+| AlphaFold parameters | 5.3 GB once | Downloaded to `BINDCRAFT_AF2_PARAMS` (which defaults to `~/.cache/bindcraft/alphafold`) on first use. A campaign needs seven of the models the archive holds. |
 
 A campaign designs against five multimer models and holds two monomer models back to validate on, so a design is never scored by a model that shaped it. `bindcraft fetch-weights` puts both sets on the machine now and prints where they are; run it on a node whose network reaches the internet. A transfer that stopped leaves a file that exists and holds nothing, so presence alone is not enough: checkpoints under 1 MB (ProteinMPNN) or 100 MB (AlphaFold) are reported as unfinished rather than accepted.
 
-### Pointing BC2 at checkpoints you already have
+### Compiled-graph caches
+
+A prediction shape costs about 60 s to compile and 1.5 s to read back, so a campaign keeps its compiled graphs between runs under `~/.cache/bindcraft/compile_cache/<card>`, filed by GPU type because an executable is not portable across cards. It prints `compiled graphs cached in <path>` when it does.
+
+That per-card cache needs `nvidia-smi` to name the card. **Where `nvidia-smi` cannot be reached, including inside the shipped container image, which does not carry it, graphs go to `${TMPDIR:-/tmp}/bindcraft_xla_cache` instead** and no caching line is printed, so every campaign pays its compiles again. Set `JAX_COMPILATION_CACHE_DIR` to keep them somewhere durable, which is also worth doing on a cluster whose nodes all carry the same card. Where the home cache exists but cannot be written, the graphs go under the campaign's own output folder.
+
+These are working files. Deleting them costs compile time and no results.
+
+### Pointing BindCraft2 at checkpoints you already have
 
 | Variable | What it names |
 | --- | --- |
@@ -99,13 +109,6 @@ A campaign designs against five multimer models and holds two monomer models bac
 
 `BINDCRAFT_AF2_PARAMS` wins over `BINDCRAFT_WEIGHTS`, which wins over `XDG_CACHE_HOME`, which wins over `~/.cache`. Parameters are accepted as `params/params_<model>.npz` or `params_<model>.npz` directly inside the named directory. Point at a directory, never at a single file.
 
-### Compiled-graph caches
-
-A prediction shape costs about 60 s to compile and 1.5 s to read back, so a campaign keeps its compiled graphs between runs under `~/.cache/bindcraft/compile_cache/<card>`, filed by GPU type because an executable is not portable across cards. It prints `compiled graphs cached in <path>` when it does.
-
-That per-card cache needs `nvidia-smi` to name the card. **Where `nvidia-smi` cannot be reached, including inside the shipped container image, which does not carry it, graphs go to `${TMPDIR:-/tmp}/bindcraft_xla_cache` instead** and no caching line is printed, so every campaign pays its compiles again. Set `JAX_COMPILATION_CACHE_DIR` to keep them somewhere durable, which is also worth doing on a cluster whose nodes all carry the same card. Where the home cache exists but cannot be written, the graphs go under the campaign's own output folder.
-
-These are working files. Deleting them costs compile time and no results.
 
 ## Run a campaign
 
@@ -131,32 +134,32 @@ bindcraft design examples/pdl1.json
 
 `design`, `score`, `rank` and `filter` build a JAX runtime; `--help`, the preset listings and `fetch-weights` deliberately do not, so they answer on a login node that cannot start one.
 
-### Four ways to launch the same campaign
+Exit status 0 is a finished campaign, 2 a refusal printed as `campaign refused:` with every reason at once, and any other non-zero status comes from the first design worker that failed.
+
+### Alternative ways to run a campaign
 
 | Starting point | Command |
 | --- | --- |
-| Installed command, environment active | `bindcraft design examples/pdl1.json` |
 | A clone with nothing activated | `python3 bindcraft.py examples/pdl1.json` |
 | Inside Python or a notebook | `from bindcraft import launch_campaign; launch_campaign("examples/pdl1.json")` |
 | A module, when the console script is not on `PATH` | `python -m bindcraft.cli design examples/pdl1.json` |
 
-`bindcraft.py` is the repository launcher. It re-executes itself under `.venv` when the interpreter running it lacks the dependencies, which is where a first run otherwise stops, and it prints what the campaign will fan out over before starting. It also accepts a bare `KEY=VALUE` as a setting override, so `python3 bindcraft.py examples/pdl1.json number_of_final_designs=1` works; every other command reaches it under the same spelling. In a notebook the line is `%run bindcraft.py examples/pdl1.json`.
-
-Exit status 0 is a finished campaign, 2 a refusal printed as `campaign refused:` with every reason at once, and any other non-zero status comes from the first design worker that failed.
 
 ## GPU and memory controls
 
-A campaign uses **every GPU it can see, without being asked**, and packs several design workers onto each card. Nothing needs configuring for this; the settings below exist for when it needs bounding.
+A campaign uses **every GPU it can see, without being asked**, and packs several design workers onto each card. Nothing needs configuring for this; the settings to override this behaviour are indicated below.
 
 ### How a campaign fills a card
 
-Visible cards are read from `CUDA_VISIBLE_DEVICES`, and from `nvidia-smi` when that is unset. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds, because the design stage leaves the card idle through ProteinMPNN redesign and validation and the extra workers fill that gap. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven. A campaign with `trajectory_only` set, or a card whose memory cannot be read, runs **one worker per card**, because gradient design alone keeps the card busy.
+Visible cards are read from `CUDA_VISIBLE_DEVICES`, and from `nvidia-smi` when that is unset. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
 
-Each worker is budgeted at `2.0 × (3.4 GB + 38 kB × N²)` for a padded complex of N residues, with 4 GB of the card left as headroom, and each is given its own share of card memory rather than JAX's default. The node's own memory caps the plan too, at 4 GB per worker, since every worker holds its own copy of the parameters. So does the campaign's trajectory budget: workers cannot share a trajectory, so a `max_trajectories` below what the node would pack sizes the fan-out down and the campaign prints that it did. A sweep divides its budget between arms and runs them one at a time, so an arm's share is what bounds its fan-out.
+If `trajectory_only` is set in a campaign, or a card whose memory cannot be read, BindCraft2 runs **one worker per card**.
+
+Each worker is budgeted at `2.0 × (3.4 GB + 38 kB × N²)` for a padded complex of N residues, with 4 GB of the card left as headroom, and each is given its own share of card memory. The node's own memory caps the plan too, at 4 GB per worker, since every worker holds its own copy of the parameters. Workers cannot share a trajectory, so **`max_trajectories` must be greater than the number of workers**.
 
 Where a campaign has several binder lengths, each worker takes a share of them so it compiles fewer shapes. A length group is then drawn as often as its worker finishes a trajectory rather than as often as its share of the range, so **faster length groups can appear more often in results**.
 
-### Overrides
+### Override GPU workers default
 
 The first five carry an environment variable that takes precedence over the setting, for changing one run without editing its file. The rest are settings only.
 
@@ -171,14 +174,14 @@ The first five carry an environment variable that takes precedence over the sett
 | `subbatch_size` | — | `auto` | An integer splits large calculations to save memory; `null` disables chunking. |
 | `length_bucket_size` | — | 32 | Pad lengths to reuse compiled shapes; 1 disables padding. |
 | `compile_next_length` | — | true | Prepare the next length while the current trajectory runs. |
-| `attention_backend` | — | `auto` | Choose the attention implementation; leave automatic unless diagnosing performance. |
+| `attention_backend` | — | `auto` | Choose the attention implementation; options: 'auto', 'stock', 'cudnn' |
 | `use_cueq` | — | false | Enable cuEquivariance kernels, which the CUDA extras install. |
 
-`BINDCRAFT_WORKER_ID`, `BINDCRAFT_WORKER_COUNT` and `BINDCRAFT_BINDER_LENGTHS` are set **for** each worker by the campaign. Do not set them by hand; a process that carries `BINDCRAFT_WORKER_ID` believes it is a worker and will not fan out.
+`BINDCRAFT_WORKER_ID`, `BINDCRAFT_WORKER_COUNT` and `BINDCRAFT_BINDER_LENGTHS` are set **for** each worker by the campaign. **Do not set them; a process that carries `BINDCRAFT_WORKER_ID` believes it is a worker and will not fan out.**
 
 ### When a campaign runs out of GPU memory
 
-Work down this list; each step costs less than the one below it.
+Trouble shoot working down this list; each step costs less than the one below it.
 
 1. Lower `workers_per_gpu`, or set it to 1. Packing is the largest single consumer.
 2. Set `subbatch_size` to an integer to chunk the largest calculations.
@@ -187,7 +190,7 @@ Work down this list; each step costs less than the one below it.
 
 Memory is sized from the padded complex, so a large target costs the same on every trajectory. Per worker that formula gives 7.1 GB at 64 residues, 8.0 at 128, 11.8 at 256, 18.0 at 384 and 26.7 at 512, which is what to divide a card by.
 
-The host-memory cap reads the node's available memory, not your job's memory limit, so on a shared node it can be generous. `XLA_PYTHON_CLIENT_PREALLOCATE` is already false, which is what lets each packed worker grow into its share rather than reserve it up front, and `XLA_FLAGS` already carries the setting BC2 needs. Leave both alone unless you are diagnosing JAX itself.
+**The host-memory cap reads the node's available memory, not your job's memory limit**, so on a shared node it can be generous. `XLA_PYTHON_CLIENT_PREALLOCATE` is already false, which is what lets each packed worker grow into its share rather than reserve it up front, and `XLA_FLAGS` already carries the setting BindCraft2 needs. Leave both alone unless you are diagnosing JAX itself.
 
 **Unset an override rather than clearing it.** An exported but empty variable counts as a value, so `BINDCRAFT_WORKERS_PER_GPU=` fails on an empty string instead of falling back to the setting.
 
@@ -196,6 +199,9 @@ The host-memory cap reads the node's available memory, not your job's memory lim
 `workers/campaign_settings.json` holds the resolved settings the workers were launched on, and `workers/worker_<NN>_gpu_<id>.log` each worker's complete record, written line by line. The shared console prints one whole trajectory at a time and in trajectory order, holding a finished trajectory until no worker is still designing a lower-numbered one, so a packed run still reads down the log as the campaign numbered it. Read a single worker's log when one of them fails.
 
 ## Slurm and other schedulers
+
+We provide a default slurm script, though different slurm clusters may have different flavors and quirks.
+In that case you can use our script as an example to adapt to your cluster specifications. 
 
 ```bash
 bash bindcraft.slurm examples/pdl1.json
@@ -210,6 +216,8 @@ sbatch --gres=gpu:4 --time=48:00:00 bindcraft.slurm examples/pdl1.json --modalit
 
 Submitted with `sbatch` it takes the allocation it is given. Its declared defaults are one GPU, 8 cores, 48 GB and 24 hours, and any `sbatch` flag overrides them. Design options follow the settings filename and are passed straight through.
 
+### Adapt to your cluster
+
 | What your site needs | How to supply it |
 | --- | --- |
 | Account and partition | `sbatch --account=... --partition=...`, or fill in the commented `#SBATCH` lines in `bindcraft.slurm`. The script cannot guess these. |
@@ -218,7 +226,7 @@ Submitted with `sbatch` it takes the allocation it is given. Its declared defaul
 
 The job prints its host, job id, the cards it can see and its working directory before starting, and writes `bindcraft_<jobid>.out` in the submission directory. Ask for the cards explicitly: **without a GPU request Slurm sets `CUDA_VISIBLE_DEVICES` empty and JAX finds no device**.
 
-The repository ships a Slurm script only. On another scheduler, or on a bare GPU workstation, run `bindcraft design settings.json` inside the allocation or session; the fan-out across visible cards is automatic either way. Request one GPU, about 4 cores and 24 GB of host memory per card.
+The repository ships a Slurm script only. On another scheduler, or on a bare GPU workstation, run `bindcraft design settings.json` inside the allocation or session; the fan-out across visible cards is automatic either way. Request at least one GPU, about 4 cores and 24 GB of host memory per card.
 
 A campaign resumes by default: run it again against the same folder, repeating its original flags, and it carries on. Counters come back from `.campaign_state.json`, or are recovered by counting result rows if that file is gone. Set `"resume": false` to refuse a non-empty folder instead.
 
@@ -247,7 +255,7 @@ enroot import -o /path/to/bindcraft.sqsh podman://bindcraft:1.0
 srun --environment=/path/to/bindcraft.toml bindcraft design settings.json
 ```
 
-**Mount every tree a symlink on your paths points into.** A parameter directory that is a link into a filesystem the container does not mount exists to `ls` and not to the campaign, and preflight refuses it as missing.
+**Mount to the container every tree a symlink on your paths points into.** A parameter directory that is a link into a filesystem the container does not mount exists to `ls` and not to the campaign, and preflight refuses it as missing.
 
 ### Reaching the cards from a container
 
@@ -266,7 +274,7 @@ See `containers/README.md` in your BindCraft2 repo for the build recipes in full
 
 ## Machines with no route to the internet
 
-The AlphaFold parameters are the only thing BC2 downloads. Choose one of these.
+The AlphaFold parameters are the only thing BindCraft2 downloads. Choose one of these.
 
 | Approach | How |
 | --- | --- |
@@ -301,7 +309,7 @@ The [trajectory viewer](outputs.md#trajectory-records-and-viewers) loads its 3Dm
 | `ProteinMPNN weights are not configured` | `BINDCRAFT_MPNN_WEIGHTS` names a directory this installation does not hold. | Unset it; the checkpoints ship inside the package. |
 | `module not installed: <name>` | An install that resolved a wheel and unpacked nothing. | `bash install.sh` again in the same environment. |
 | `bindcraft: this environment has no ...` | The command is running under an interpreter that is not the installed one. | `source .venv/bin/activate`, or use `python3 bindcraft.py`. |
-| `... is active and BC2 needs 3.12 or newer` | An older Python environment is active. | Deactivate it and run `bash install.sh` to build `.venv`. |
+| `... is active and BindCraft2 needs 3.12 or newer` | An older Python environment is active. | Deactivate it and run `bash install.sh` to build `.venv`. |
 | A path exists to `ls` and the campaign calls it missing | A symlink into a filesystem the container does not mount. | Mount the tree the link points into. |
 | Out of GPU memory | Too many packed workers for the complex size. | [When a campaign runs out of GPU memory](#when-a-campaign-runs-out-of-gpu-memory). |
 | `already holds campaign output` | `"resume": false` was set and that folder is not empty. | Drop `resume: false` to continue it (resuming is the default), or use a fresh `project_folder`. |

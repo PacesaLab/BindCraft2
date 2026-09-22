@@ -27,7 +27,6 @@ bindcraft = "bindcraft.cli:main"
 cuda12 = ["jax[cuda12]>=0.11,<0.12", "cuequivariance-jax>=0.11,<0.12", "cuequivariance-ops-cu12>=0.11,<0.12"]
 cuda13 = ["jax[cuda13]>=0.11,<0.12", "cuequivariance-jax>=0.11,<0.12", "cuequivariance-ops-cu13>=0.11,<0.12"]
 rocm = ["jax[rocm7-local]>=0.11,<0.12"]
-oneapi = ["jax[oneapi]>=0.11,<0.12"]
 docs = ["sphinx", "furo", "myst-parser", "sphinx-copybutton"]
 
 [build-system]
