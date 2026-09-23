@@ -243,5 +243,5 @@ BC2 builds on a great deal of prior work, and we are grateful to the people and 
 - **[AlphaFold 2](https://github.com/google-deepmind/alphafold)** (DeepMind) — BC2 uses AlphaFold 2 code and models for both sequence optimisation and validation.
 - **[ColabDesign](https://github.com/sokrypton/ColabDesign)** (Sergey Ovchinnikov) — the design engine is based on ColabDesign's hallucination and design framework.
 - **[ProteinMPNN](https://github.com/dauparas/ProteinMPNN)** (Justas Dauparas) — used for sequence redesign.
-- **HyperMPNN** — the "positive" design weights are taken from the MeilerLab GitHub repository.
+- **[HyperMPNN](https://github.com/meilerlab/HyperMPNN)** — the "positive" design weights are taken from the MeilerLab GitHub repository.
 - Special thanks to **Lennart Nickel** (Correia group).
