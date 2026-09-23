@@ -292,7 +292,7 @@ rarer** — add only what your experiment needs. The overall roles:
 | Property / objective | Pushes the design toward | Rejects unless |
 | --- | --- | --- |
 | `forced_targeting` | contact concentrated on the declared hotspots | ≥50% of hotspots contacted |
-| `humanize` | human-germline sequence (*planned*) + low predicted MHC anchor load | MHC anchor score under its ceiling |
+| `humanize` | humanized sequence (*planned*) + low predicted MHC anchor load | MHC anchor score under its ceiling |
 | `disulfide_staple` | a geometrically valid disulfide (cysteine allowed) | ≥1 disulfide formed |
 | `protease_stable` | fewer protease-cleavage motifs, buried loops and termini | protease-site / exposed-loop / terminus-exposure scores under their ceilings |
 | `termini_accessible` | both chain ends angled away from the target | termini-away angle clears its floor |
