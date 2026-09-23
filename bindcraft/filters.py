@@ -456,6 +456,15 @@ def scaffold_framework_correspondence(protein_states: ProteinStates, prediction_
         scaffold_framework &= (residue_numbers < start) | (residue_numbers > end)
     return (design_framework, scaffold_protein, scaffold_framework) if design_framework.sum() == scaffold_framework.sum() else None
 
+@filter_metric('Binder_Mutations')
+def binder_mutations_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', parent_sequences: tuple[str, ...]=()) -> float | None:
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    protein = protein_states[prediction_state][binder]
+    designed_sequence = ''.join(binder_one_letter_sequence(protein)[np.asarray(real_residue_mask(protein.flags))])
+    #the nearest parent of the same length, so one threshold still reads when several were given
+    substitutions = [sum((1 for designed_residue, parent_residue in zip(designed_sequence, parent_sequence) if designed_residue != parent_residue)) for parent_sequence in parent_sequences if len(parent_sequence) == len(designed_sequence)]
+    return float(min(substitutions)) if substitutions else None
+
 @filter_metric('Scaffold_Sequence_Retained_Fraction')
 def scaffold_sequence_retained_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', scaffold: str='', scaffold_edits: str='', scaffold_chain: str='') -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)

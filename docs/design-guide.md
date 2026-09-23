@@ -45,6 +45,29 @@ list you actually inspect.
 Design-time metrics (from stage 1) are optimistic by construction. **Trust the validation numbers
 (stage 3), not the trajectory numbers.**
 
+### Starting from a binder you already have
+
+If you already have a binder sequence — an accepted design, a hit from the bench, a panel of point
+mutants — you can skip stage 1 entirely. Write the sequences under `binder_sequences` and add
+`mpnn_redesign: true`:
+
+```json
+{
+  "target": "hPDL1",
+  "mpnn_redesign": true,
+  "binder_sequences": { "parent": "SAEMKEVEEKFEKVKKAIE..." },
+  "redesign_max_positions": 2,
+  "sequence_candidates": 40
+}
+```
+
+Each sequence is folded once and judged on the campaign's `_final` filters, then stages 2–4 run
+exactly as above: MPNN draws candidates off that fold, each is refolded from scratch and scored, and
+the survivors are ranked. `redesign_max_positions` decides how far a candidate may move — leave it out
+for unconstrained redesigns, set `2` for double mutants, or set `0` to fold and score the sequences you
+gave and generate nothing at all. `Binder_Mutations` in the output tables says how far each candidate
+moved from its parent. See [Models and sequence redesign](reference.md#models-and-sequence-redesign).
+
 ---
 
 ## 2. Setting up a design
@@ -383,6 +406,7 @@ than designing something incoherent:
 | `homo_oligomer` (`copies` > 1) with `multidomain` | the domain split doesn't engage across identical oligomer copies |
 | a **FASTA / disordered target** with `forced_targeting` or `coldspots` | both need residue numbers and a resolved backbone that a sequence target doesn't carry |
 | `induced_fit` with **detargeting** | induced fit freezes one bound structure to compare the free state against, so it designs against a single target |
+| `mpnn_redesign` with a **scaffold modality** or `homo_oligomer` (`copies` > 1) | a redesign starts from a sequence you gave, so there is no scaffold to rebuild; and its substitution cap counts residues rather than tied groups, so it would break the tie between oligomer copies |
 
 Everything else is fair game — targeting options (hotspots, coldspots, forced targeting, detargeting),
 developability properties (humanize, protease_stable, disulfide_staple), termini controls and topology

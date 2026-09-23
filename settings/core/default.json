@@ -31,6 +31,8 @@
   "kept_sequences": 1,
   "enough_passing_sequences": 3,
   "redesign_interface": false,
+  "redesign_max_positions": null,
+  "redesign_position_temperature": 1.0,
   "design_dropout": true,
   "forced_targeting": false,
   "design_recycles": 1,

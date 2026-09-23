@@ -33,7 +33,7 @@ def has_fasta_target(settings: dict) -> bool:
 LOSS_PARAMETERS = {'interface_contact_distance': ('interface_contacts', 'cutoff'), 'non_contact_distance': ('non_contact', 'cutoff'), 'termini_distance_threshold': ('termini_distance', 'threshold_distance'), 'disulfide_distance': ('disulfide', 'distance'), 'disulfide_sigma': ('disulfide', 'sigma'), 'disulfide_sequence_separation': ('disulfide', 'sequence_separation'), 'disulfide_temperature': ('disulfide', 'temperature'), 'induced_fit_delta': ('induced_fit_interface', 'interface_rmsd_target'), 'induced_fit_interface_cutoff': ('induced_fit_interface', 'cutoff'), 'induced_fit_tm_target': ('induced_fit_global', 'tm_target'), 'humanization_species': ('humanization', 'species'), 'humanization_coupling_weight': ('humanization', 'coupling_weight'), 'humanization_hydro_weight': ('humanization', 'hydrophobicity_weight'), 'humanization_mhc2_weight': ('humanization', 'mhc_class_ii_weight'), 'exposed_loops_measure': ('exposed_loops', 'measure'), 'exposed_loops_distinguish_sheets': ('exposed_loops', 'distinguish_sheets')}
 DOMAIN_PARAMETERS = 'n_domains', 'min_domain_size', 'max_domain_size', 'max_domains', 'domain_rg_weight', 'domain_sep_weight', 'domain_contact_cutoff', 'domain_pae_margin', 'domain_linker_gap', 'domain_linker_sharpness', 'domain_linker_helix_weight'
 DESIGN_STAGE_NAMES = 'screen', 'refine', 'anneal', 'harden', 'mutate', 'final'
-CAMPAIGN_SETTING_NAMES = frozenset({'aa_bias', 'archive_trajectories', 'attention_backend', 'auto_multi_gpu', 'autotune', 'autotune_loss_weights', 'betasheet_reopt_extra_anneal_steps', 'betasheet_reopt_extra_refine_steps', 'betasheet_reopt_recycles', 'betasheet_reopt_trigger', 'binder_chain', 'binder_lengths', 'binder_name', 'binder_scaffold', 'binder_shapes', 'campaign_name', 'campaign_seed', 'compile_next_length', 'copies', 'crop_fasta_sequence', 'cyclic_offset_mode', 'cyclize_peptide', 'design_dropout', 'design_models', 'design_recycles', 'design_workers', 'desperation', 'desperation_trajectories', 'detarget_check_interval', 'domain_linker_fix_cut', 'enough_passing_sequences', 'filters', 'forced_targeting', 'forced_targeting_shell', 'gpu_ids', 'hash_design_names', 'idr_crop_count', 'induced_fit_monomer_adaptive', 'induced_fit_monomer_chunk', 'induced_fit_monomer_plddt', 'induced_fit_monomer_steps', 'induced_fit_mpnn_designed_share', 'induced_fit_mpnn_shell', 'induced_fit_mpnn_threshold', 'induced_fit_steps', 'initial_guess', 'kept_sequences', 'length_bucket_size', 'losses', 'max_binder_chain_breaks_final', 'max_binder_free_cysteines_final', 'max_coldspot_contact_final', 'max_cyclic_closure_distance_final', 'max_detarget_interface_residues_final', 'max_detarget_iptm', 'max_detarget_rounds', 'max_exposed_loop_fraction_final', 'max_helix_fraction_final', 'max_induced_fit_tm_final', 'max_interdomain_contact_final', 'max_mhc_anchor_score_final', 'max_off_epitope_contact_final', 'max_off_paratope_contact_final', 'max_oligomer_symmetry_rmsd_final', 'max_protease_site_score_final', 'max_scaffold_framework_rmsd_final', 'max_surface_hydrophobicity_final', 'max_termini_distance_final', 'max_terminus_exposure_final', 'max_trajectories', 'max_workers_per_gpu', 'min_binder_disulfides_final', 'min_domain_separation_ratio_final', 'min_epitope_residues_contacted_final', 'min_framework_packing_final', 'min_hotspot_contact_final', 'min_induced_fit_interface_rmsd_final', 'min_interface_buried_area_final', 'min_receptor_chains_contacted_final', 'min_scaffold_sequence_retained_final', 'min_target_crop_length_final', 'min_target_plddt_final', 'min_termini_away_cosine_final', 'mpnn_fix_linker', 'mpnn_model', 'mpnn_variant', 'multitarget_best_round', 'multitarget_cumulative_filter', 'multitarget_filter_models', 'multitarget_merged_gradient_budget', 'multitarget_merged_gradients', 'multitarget_rounds_per_target', 'multitarget_steps', 'multitarget_swap_patience', 'multitarget_swap_threshold', 'multitarget_tied_redesign', 'multitarget_warmup_patience', 'mutate_positions', 'number_of_final_designs', 'oligomer_tie', 'parameter_sweep', 'project_folder', 'redesign_interface', 'relax_accepted_designs', 'relax_learning_rate', 'relax_min_sep', 'relax_overlap_tol', 'relax_restraint_backbone', 'relax_restraint_sidechain', 'relax_steps', 'relax_weight_bond', 'relax_weight_clash', 'resume', 'save_binder_monomers', 'save_design_animations', 'save_design_frames', 'save_design_trajectory', 'save_design_sequences', 'save_failed_refolds', 'save_failed_trajectories', 'save_loss_plots', 'sequence_candidates', 'sparse_output', 'subbatch_size', 'target_chain', 'targets', 'trajectory_only', 'use_cueq', 'validation_crop_flank', 'validation_model', 'validation_models', 'validation_recycles', 'worker_launch_stagger', 'workers_per_gpu'})
+CAMPAIGN_SETTING_NAMES = frozenset({'aa_bias', 'archive_trajectories', 'attention_backend', 'auto_multi_gpu', 'autotune', 'autotune_loss_weights', 'betasheet_reopt_extra_anneal_steps', 'betasheet_reopt_extra_refine_steps', 'betasheet_reopt_recycles', 'betasheet_reopt_trigger', 'binder_chain', 'binder_lengths', 'binder_name', 'binder_scaffold', 'binder_sequences', 'binder_shapes', 'campaign_name', 'campaign_seed', 'compile_next_length', 'copies', 'crop_fasta_sequence', 'cyclic_offset_mode', 'cyclize_peptide', 'design_dropout', 'design_models', 'design_recycles', 'design_workers', 'desperation', 'desperation_trajectories', 'detarget_check_interval', 'domain_linker_fix_cut', 'enough_passing_sequences', 'filters', 'forced_targeting', 'forced_targeting_shell', 'gpu_ids', 'hash_design_names', 'idr_crop_count', 'induced_fit_monomer_adaptive', 'induced_fit_monomer_chunk', 'induced_fit_monomer_plddt', 'induced_fit_monomer_steps', 'induced_fit_mpnn_designed_share', 'induced_fit_mpnn_shell', 'induced_fit_mpnn_threshold', 'induced_fit_steps', 'initial_guess', 'kept_sequences', 'length_bucket_size', 'losses', 'max_binder_chain_breaks_final', 'max_binder_free_cysteines_final', 'max_coldspot_contact_final', 'max_cyclic_closure_distance_final', 'max_detarget_interface_residues_final', 'max_detarget_iptm', 'max_detarget_rounds', 'max_exposed_loop_fraction_final', 'max_helix_fraction_final', 'max_induced_fit_tm_final', 'max_interdomain_contact_final', 'max_mhc_anchor_score_final', 'max_off_epitope_contact_final', 'max_off_paratope_contact_final', 'max_oligomer_symmetry_rmsd_final', 'max_protease_site_score_final', 'max_scaffold_framework_rmsd_final', 'max_surface_hydrophobicity_final', 'max_termini_distance_final', 'max_terminus_exposure_final', 'max_trajectories', 'max_workers_per_gpu', 'min_binder_disulfides_final', 'min_domain_separation_ratio_final', 'min_epitope_residues_contacted_final', 'min_framework_packing_final', 'min_hotspot_contact_final', 'min_induced_fit_interface_rmsd_final', 'min_interface_buried_area_final', 'min_receptor_chains_contacted_final', 'min_scaffold_sequence_retained_final', 'min_target_crop_length_final', 'min_target_plddt_final', 'min_termini_away_cosine_final', 'mpnn_fix_linker', 'mpnn_model', 'mpnn_variant', 'multitarget_best_round', 'multitarget_cumulative_filter', 'multitarget_filter_models', 'multitarget_merged_gradient_budget', 'multitarget_merged_gradients', 'multitarget_rounds_per_target', 'multitarget_steps', 'multitarget_swap_patience', 'multitarget_swap_threshold', 'multitarget_tied_redesign', 'multitarget_warmup_patience', 'mutate_positions', 'number_of_final_designs', 'oligomer_tie', 'parameter_sweep', 'project_folder', 'redesign_interface', 'redesign_max_positions', 'redesign_position_temperature', 'relax_accepted_designs', 'relax_learning_rate', 'relax_min_sep', 'relax_overlap_tol', 'relax_restraint_backbone', 'relax_restraint_sidechain', 'relax_steps', 'relax_weight_bond', 'relax_weight_clash', 'resume', 'save_binder_monomers', 'save_design_animations', 'save_design_frames', 'save_design_trajectory', 'save_design_sequences', 'save_failed_refolds', 'save_failed_trajectories', 'save_loss_plots', 'sequence_candidates', 'sparse_output', 'subbatch_size', 'target_chain', 'targets', 'trajectory_only', 'use_cueq', 'validation_crop_flank', 'validation_model', 'validation_models', 'validation_recycles', 'worker_launch_stagger', 'workers_per_gpu'})
 FINAL_CONFIDENCE_FILTERS = {'min_monomer_plddt_final': 'Unbound_Binder_pLDDT', 'min_ptm_final': 'pTM', 'min_iptm_final': 'i_pTM', 'max_ipae_final': 'i_pAE'}
 TARGET_SETTING_NAMES = frozenset({'name', 'target_path', 'chains', 'hotspots', 'coldspots', 'weight', 'objective'})
 METRIC_ENTRY_NAMES = frozenset({'params', 'prediction_state'})
@@ -237,6 +237,21 @@ def terminus_away_feature(terminus: str) -> 'CampaignFeature':
     return CampaignFeature(f'{terminus} terminus away from the target', lambda settings, terminus=terminus: bool(settings.get(f'weights_{terminus}_terminus_away')),
                            checks=(ModalityCheck(f'{terminus.upper()}_Terminus_Away_Cosine', -1.0, True, f'min_{terminus}_terminus_away_cosine_final'),))
 
+def mutation_check_parameters(settings: dict) -> dict:
+    return {'parent_sequences': tuple(resolve_binder_sequences(settings).values())}
+
+def configure_mpnn_redesign(settings: dict, request: ConfigurationRequest) -> None:
+    #one trajectory per sequence that was given, so every one is folded and redesigned exactly once
+    parent_count = len(resolve_binder_sequences(settings))
+    settings.setdefault('max_trajectories', parent_count)
+    settings.setdefault('number_of_final_designs', parent_count * int(settings.get('sequence_candidates', 1) or 1))
+
+def mpnn_redesign_note(settings: dict) -> str:
+    parents = resolve_binder_sequences(settings)
+    cap = settings.get('redesign_max_positions')
+    limit = 'no cap on substitutions' if cap is None else ('evaluation only, no substitutions' if not int(cap) else f'at most {int(cap)} substitution(s)')
+    return f"MPNN redesign: {len(parents)} given sequence(s) of {'/'.join(str(len(sequence)) for sequence in parents.values())} residue(s), {limit}"
+
 def designs_peptide(settings: dict) -> bool:
     lengths = campaign_binder_lengths(settings.get('binder_lengths'))
     return bool(lengths) and max(lengths) < 36 and not settings.get('cyclize_peptide')
@@ -256,6 +271,11 @@ CAMPAIGN_FEATURES = (
                                ('multi-chain binder', 'a scaffold defines one binder chain, so it cannot also be copied into an oligomer'),
                                ('fold switching', 'a framework fixes the fold, so it cannot also be told to switch fold'),
                                ('mixed topology', 'a framework fixes the fold, so it cannot also be told to change its secondary structure'))),
+    CampaignFeature('MPNN redesign', lambda settings: bool(settings.get('mpnn_redesign')), shorthand='redesign', switch='mpnn_redesign', configure=configure_mpnn_redesign,
+                    checks=(ModalityCheck('Binder_Mutations', 0.0, True, parameters=mutation_check_parameters),),  #recorded, never rejecting: how far a candidate moved is worth reading whether or not it is required
+                    note=mpnn_redesign_note,
+                    conflicts=(('fold conditioning', 'a redesign starts from a sequence that is given, so there is no scaffold to rebuild'),
+                               ('multi-chain binder', 'the substitution cap counts residues rather than tied groups, so it would break the tie between copies'))),
     CampaignFeature('forced targeting', lambda settings: bool(settings.get('forced_targeting')), shorthand='forced', switch='forced_targeting', configure=configure_focused_epitope,
                     note=lambda settings: f"forced targeting: everything outside {settings.get('forced_targeting_shell', 'the default')} Angstrom of the hotspots rebuilt as lysine"),
     CampaignFeature('multidomain binder', lambda settings: bool(settings.get('weights_multidomain')), configure=configure_multidomain,
@@ -516,12 +536,26 @@ def resolve_binder_lengths(binder_lengths) -> tuple[int, ...] | None:
         return tuple(int(length) for length in share.split(','))
     return campaign_binder_lengths(binder_lengths)
 
+def resolve_binder_sequences(settings: dict) -> dict[str, str]:
+    binder_sequences = settings.get('binder_sequences') or {}
+    if not isinstance(binder_sequences, dict):
+        raise ValueError('binder_sequences is written {"name": "SEQUENCE"}, naming every binder the redesign starts from')
+    resolved = {}
+    for name, sequence in binder_sequences.items():
+        residues = ''.join(str(sequence).split()).upper()
+        unknown = ''.join(sorted(set(residues) - set(AMINO_ACIDS)))
+        if not residues or unknown:
+            raise ValueError(f'binder_sequences[{name!r}] must be a non-empty one-letter amino acid sequence; got {unknown or "nothing"}')
+        resolved[name] = residues
+    return resolved
+
 @dataclass
 class BinderSettings:
     lengths: tuple[int, ...] | None = None
     copies: int = 1
     scaffold: str | None = None
     scaffold_edits: str = ''
+    sequences: dict[str, str] = field(default_factory=dict)
     amino_acid_bias: dict[str, float] = field(default_factory=dict)
     omitted_amino_acids: str = ''
 
@@ -649,7 +683,7 @@ def build_design_settings(settings: dict) -> BinderDesignSettings:
             raise ValueError(f'Target {state.source_target!r} needs target_path or structure')
     targets = [TargetSettings(state.name, state.path, state.chains, state.hotspots, state.weight, state.coldspots) for state in prepared_states]
     binder_lengths = resolve_binder_lengths(settings.get('binder_lengths'))
-    binder = BinderSettings(lengths=binder_lengths, copies=settings.get('copies', 1), scaffold=settings.get('binder_scaffold'), scaffold_edits=settings.get('mutate_positions', ''), amino_acid_bias=resolve_amino_acid_bias(settings), omitted_amino_acids=resolve_omitted_amino_acids(settings))
+    binder = BinderSettings(lengths=binder_lengths, copies=settings.get('copies', 1), scaffold=settings.get('binder_scaffold'), scaffold_edits=settings.get('mutate_positions', ''), sequences=resolve_binder_sequences(settings), amino_acid_bias=resolve_amino_acid_bias(settings), omitted_amino_acids=resolve_omitted_amino_acids(settings))
     filter_settings = settings.get('filters')
     filters = build_filters(filter_settings, resolve_designed_binder_chain(settings)) if isinstance(filter_settings, dict) else {}
     return BinderDesignSettings(targets, binder, settings, filters, settings.get('campaign_seed') or 0, tuple(tuple(group) for group in settings.get('binder_shapes', [])), prepared_states)

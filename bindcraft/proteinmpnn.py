@@ -63,9 +63,12 @@ def read_mpnn_checkpoint(path: str) -> tuple[dict[str, dict[str, np.ndarray]], i
 
 
 class ProteinMPNNSequenceModel(ProteinPredictor):
-    def __init__(self, data_dir: str, model_name: str='v_48_020', temperature: float=0.1, key: Array | None=None, max_cache_size: int=8, variant: str='neutral', omitted_amino_acids: str='', amino_acid_bias: dict[str, float] | None=None, multi_chain_binders: tuple[tuple[str, ...], ...]=(), length_bucket_size: int=DEFAULT_LENGTH_BUCKET, target_pad_length: int=0):
+    def __init__(self, data_dir: str, model_name: str='v_48_020', temperature: float=0.1, key: Array | None=None, max_cache_size: int=8, variant: str='neutral', omitted_amino_acids: str='', amino_acid_bias: dict[str, float] | None=None, multi_chain_binders: tuple[tuple[str, ...], ...]=(), length_bucket_size: int=DEFAULT_LENGTH_BUCKET, target_pad_length: int=0, redesign_max_positions: int | None=None, redesign_position_temperature: float=1.0):
         self.model_name = model_name
         self.variant = variant
+        #None leaves a decode unconstrained, a number keeps only that many substitutions and reverts the rest
+        self.redesign_max_positions = None if redesign_max_positions is None else int(redesign_max_positions)
+        self.redesign_position_temperature = float(redesign_position_temperature)
         self.length_bucket_size = length_bucket_size
         self.target_pad_length = target_pad_length
         self.multi_chain_binders = multi_chain_binders
@@ -84,6 +87,17 @@ class ProteinMPNNSequenceModel(ProteinPredictor):
         self.mpnn_sampler = hk.transform(sample_backbone_sequence)
         self.prediction_compile_cache = CompiledModelCache(max_cache_size)
 
+    def capped_amino_acids(self, key: Array, amino_acid_log_probabilities: Array, sampled_amino_acids: Array, original_amino_acids: Array, redesigned_residue_mask: Array) -> Array:
+        #only the most improving substitutions are applied, so a candidate stays a short hop from the sequence it started from
+        residue_positions = jnp.arange(sampled_amino_acids.shape[0])
+        improvement = amino_acid_log_probabilities[residue_positions, sampled_amino_acids] - amino_acid_log_probabilities[residue_positions, original_amino_acids]
+        #Gumbel-top-k: ranked on improvement alone the same few positions win every draw, so the cap would return one variant however many were asked for
+        ranked = improvement if not self.redesign_position_temperature else improvement / self.redesign_position_temperature + jax.random.gumbel(jax.random.fold_in(key, 0), improvement.shape)
+        substituted = redesigned_residue_mask & (sampled_amino_acids != original_amino_acids)
+        #fewer substitutions than the cap needs no guard: top_k then lands on positions where the sample already is the original, so writing it back changes nothing
+        kept = jax.lax.top_k(jnp.where(substituted, ranked, -jnp.inf), min(self.redesign_max_positions, sampled_amino_acids.shape[0]))[1]
+        return original_amino_acids.at[kept].set(sampled_amino_acids[kept])
+
     def _compiled_complex_prediction(self, chain_lengths: tuple[int, ...], tied_residue_groups: tuple=()) -> Callable:
         cache_key = chain_lengths, tied_residue_groups
         compiled_sequence_prediction = self.prediction_compile_cache.get(cache_key)
@@ -98,7 +112,7 @@ class ProteinMPNNSequenceModel(ProteinPredictor):
                 amino_acid_log_probabilities = jax.nn.log_softmax(sequence_from_mpnn_alphabet(mpnn_prediction['logits']), axis=-1)[..., :20]
                 redesigned_residue_mask = jnp.logical_not(fixed_residue_mask)
                 original_amino_acids = sequence.argmax(-1)
-                selected_amino_acids = jnp.where(redesigned_residue_mask, sampled_amino_acids, original_amino_acids)
+                selected_amino_acids = jnp.where(redesigned_residue_mask, sampled_amino_acids, original_amino_acids) if self.redesign_max_positions is None else self.capped_amino_acids(key, amino_acid_log_probabilities, sampled_amino_acids, original_amino_acids, redesigned_residue_mask)
                 residue_negative_log_likelihood = -jnp.take_along_axis(amino_acid_log_probabilities, selected_amino_acids[:, None], axis=-1)[:, 0]
                 sequence_negative_log_likelihood = (residue_negative_log_likelihood * resolved_ca_mask).sum() / (resolved_ca_mask.sum() + 1e-08)
                 recovered_residue_mask = (selected_amino_acids == original_amino_acids).astype(jnp.float32)
