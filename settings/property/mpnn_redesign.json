@@ -1,11 +1,10 @@
 {
-  "description": "ProteinMPNN redesign of a binder sequence that is given: no gradient stages, the whole binder designable, and every candidate carried through the validation refold",
+  "description": "ProteinMPNN redesign of a binder sequence that is given: no gradient stages, and every candidate carried through the validation refold. Add redesign_interface to put the interface of that sequence in play too",
   "screen_steps": 0,
   "refine_steps": 0,
   "anneal_steps": 0,
   "harden_steps": 0,
   "mutate_steps": 0,
-  "redesign_interface": true,
   "sequence_candidates": 20,
   "kept_sequences": 20,
   "enough_passing_sequences": 0

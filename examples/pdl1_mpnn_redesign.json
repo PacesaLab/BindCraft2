@@ -5,6 +5,7 @@
   "binder_sequences": {
     "pdl1_parent": "SAEMKEVEEKFEKVKKAIEEEAKKTGDEELLWIIRVYENILNFMKSKPWFTPEHLEWLVKELARWSPEAQKVLE"
   },
+  "redesign_interface": true,
   "sequence_candidates": 20,
   "min_iptm_final": 0.6,
   "min_monomer_plddt_final": 0.7,

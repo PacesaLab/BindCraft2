@@ -195,6 +195,12 @@ class Protein:
         return Protein(sequence=0.01 * jax.random.normal(key, (length, len(AMINO_ACIDS)), dtype=jnp.float16), atoms=atoms, atom_mask=atom_mask, flags=jnp.full((length,), ResidueFlags.DESIGN, dtype=jnp.uint8), residue_index=residue_index)
 
     @staticmethod
+    def from_binder_sequence(name: str, amino_acid_sequence: str) -> 'Protein':
+        #sequence only: the coordinates are never handed to the predictor, so pLDDT and ipTM still tell the redesigns apart
+        parent = Protein.from_fasta(f'>{name}\n{amino_acid_sequence}')
+        return parent.replace(flags=(parent.flags | int(ResidueFlags.DESIGN)).astype(jnp.uint8))
+
+    @staticmethod
     def from_fasta(source: str, chain_letter: str='A', flags: str='') -> 'Protein':
         records = read_fasta_sequences(source)
         if chain_letter in records:

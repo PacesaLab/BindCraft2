@@ -7,6 +7,7 @@
   },
   "redesign_max_positions": 2,
   "redesign_position_temperature": 1.0,
+  "redesign_interface": true,
   "sequence_candidates": 40,
   "kept_sequences": 40,
   "min_iptm_final": 0.6,

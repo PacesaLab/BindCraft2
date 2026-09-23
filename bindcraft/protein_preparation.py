@@ -131,11 +131,6 @@ def sampled_binder_parent(binder_sequences: dict[str, str], length_random_key: A
     parent_names = sorted(binder_sequences)
     return parent_names[int(jax.random.choice(length_random_key, len(parent_names)))]
 
-def given_binder_parent(parent_name: str, parent_sequence: str) -> Protein:
-    #sequence only: the coordinates are never handed to the predictor, so pLDDT and ipTM still tell the redesigns apart
-    parent = Protein.from_fasta(f'>{parent_name}\n{parent_sequence}')
-    return parent.replace(flags=(parent.flags | int(ResidueFlags.DESIGN)).astype(jnp.uint8), residue_index=parent.residue_index + 1)
-
 def prepare_binder_chains(design_settings: BinderDesignSettings, key: Array) -> dict[str, Protein]:
     #one key for every chain, for multi-chain binders
     length_random_key, binder_random_key = jax.random.split(key)
@@ -143,7 +138,7 @@ def prepare_binder_chains(design_settings: BinderDesignSettings, key: Array) -> 
     binder_length = sampled_binder_length(binder_lengths, length_random_key)
     if design_settings.binder.sequences:
         parent_name = sampled_binder_parent(design_settings.binder.sequences, length_random_key)
-        parent = given_binder_parent(parent_name, design_settings.binder.sequences[parent_name])
+        parent = Protein.from_binder_sequence(parent_name, design_settings.binder.sequences[parent_name])
         binder = {chain_name: parent for chain_name in design_settings.binder_chains}
     elif design_settings.binder.scaffold:
         scaffold_chains = structure_chain_names(design_settings.binder.scaffold)
@@ -191,7 +186,7 @@ def sampled_trajectory_values(design_settings: BinderDesignSettings, key: Array)
     if design_settings.binder.sequences:
         drawn['binder_parent'] = sampled_binder_parent(design_settings.binder.sequences, jax.random.split(binder_initialization_key)[0])
     if design_settings.binder.scaffold:
-        drawn['conformation.binder_scaffold'] =''.join(target_conformation_fingerprint(protein) for protein in binder_chains.values())
+        drawn['conformation.binder_scaffold'] = ''.join(target_conformation_fingerprint(protein) for protein in binder_chains.values())
     return (drawn, prepare_targets(design_settings, trajectory_seed))
 
 def initialize_design_trajectory(design_settings: BinderDesignSettings, key: Array, targets: dict[str, Protein] | None=None) -> tuple[ProteinStates, tuple[tuple[str, ...], ...], dict[str, DesignLoss]]:

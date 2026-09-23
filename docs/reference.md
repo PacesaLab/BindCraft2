@@ -162,7 +162,7 @@ The supplied AlphaFold names are `model_1_multimer_v3` through `model_5_multimer
 | `2` | Double mutants. MPNN samples the whole designable binder, then all but its two most improving substitutions revert. Raise `sequence_candidates` for coverage, and `redesign_position_temperature` to spread which positions are chosen. |
 | `0` | Evaluation only: the given sequence comes back unchanged as a candidate of its own, so a panel of sequences is folded, refolded and scored without generating anything. Set `sequence_candidates: 1`, since every candidate would otherwise be the same sequence. |
 
-The number of trajectories and accepted designs default to one trajectory per given sequence and `sequence_candidates` designs each. Because the whole binder is designable the preset sets `redesign_interface: true`; the substitution cap, not a held interface, is what keeps a candidate close to what you gave it.
+The number of trajectories and accepted designs default to one trajectory per given sequence and `sequence_candidates` designs each. `redesign_interface` keeps its `false` default, so the interface of the sequence you gave is held and substitutions land away from it. Set `redesign_interface: true`, as the redesign examples do, to put the interface itself in play: it is usually the part worth redesigning, and the substitution cap rather than a held interface is what keeps a candidate close to what you gave it.
 
 ## Biological options
 

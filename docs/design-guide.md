@@ -57,6 +57,7 @@ mutants — you can skip stage 1 entirely. Write the sequences under `binder_seq
   "mpnn_redesign": true,
   "binder_sequences": { "parent": "SAEMKEVEEKFEKVKKAIE..." },
   "redesign_max_positions": 2,
+  "redesign_interface": true,
   "sequence_candidates": 40
 }
 ```
@@ -65,8 +66,9 @@ Each sequence is folded once and judged on the campaign's `_final` filters, then
 exactly as above: MPNN draws candidates off that fold, each is refolded from scratch and scored, and
 the survivors are ranked. `redesign_max_positions` decides how far a candidate may move — leave it out
 for unconstrained redesigns, set `2` for double mutants, or set `0` to fold and score the sequences you
-gave and generate nothing at all. `Binder_Mutations` in the output tables says how far each candidate
-moved from its parent. See [Models and sequence redesign](reference.md#models-and-sequence-redesign).
+gave and generate nothing at all. `redesign_interface: true` is worth adding, as above: without it the
+interface of the sequence you gave is held and every substitution lands elsewhere. `Binder_Mutations` in
+the output tables says how far each candidate moved from its parent. See [Models and sequence redesign](reference.md#models-and-sequence-redesign).
 
 ---
 
