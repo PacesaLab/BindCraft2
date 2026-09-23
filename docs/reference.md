@@ -32,7 +32,7 @@ Each layer overrides the ones above it in the table. A target therefore wins ove
 
 ### Every setting at its default
 
-[settings/core/reference.json](../settings/core/reference.json) is the catalogue of all 235 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in [settings/core/default.json](../settings/core/default.json), and change one campaign in its own JSON or with `--set`.
+[settings/core/reference.json](../settings/core/reference.json) is the catalogue of all 238 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in [settings/core/default.json](../settings/core/default.json), and change one campaign in its own JSON or with `--set`.
 
 ### Paths
 
@@ -73,6 +73,7 @@ Metadata is a separate JSON object for author, project and other descriptive fie
 | `targets[].weight` | 1 | Relative importance of each target; a negative value also selects detargeting. |
 | `binder_lengths` | Preset or scaffold | `[80,80]` fixes 80 residues; `[60,100]` allows the inclusive range; `[60,80,100]` allows only those choices. Length is per copy for an oligomer. |
 | `binder_scaffold` | Unset | Supply an existing binder fold; overrides de novo length selection. |
+| `binder_sequences` | Unset | Supply binder sequences to start from, written `{"name": "SEQUENCE"}`. One trajectory per name, in name order, each at the length of its own sequence. Alone it seeds the gradient stages; with `mpnn_redesign` they are switched off and the sequence is only redesigned. `binder_lengths` is replaced by the lengths of these sequences, from wherever it came; a scaffold alongside it is refused. |
 | `mutate_positions` | Preset or unset | Select scaffold residues to redesign, resize or mark as binding/non-binding. |
 | `aa_bias` | Preset; `binder` excludes C | Amino-acid propensities: 1 neutral, 2 favoured, 0.4 disfavoured, 0 excluded. Applies to design and redesign. |
 | `copies` | 1; oligomer preset 2 | Number of binder copies in an assembly. |
@@ -142,12 +143,26 @@ Replace `<stage>` with any of the six stage names above. Presets can change stag
 | `enough_passing_sequences` | 3 | Stop drawing after this many candidates pass; raise to evaluate more alternatives. |
 | `kept_sequences` | 1 | Retain the best passing candidates by `i_pDAE`. |
 | `redesign_interface` | false | Allow ProteinMPNN to change interface residues instead of holding the designed interface fixed. |
+| `redesign_max_positions` | null | Cap how many substitutions a candidate may carry. `null` leaves a redesign unconstrained; `2` gives double mutants; `0` returns the input sequence unchanged, for evaluation. Counted per tied group, so on a multi-chain binder it is substitutions per protomer and every copy keeps the same ones. |
+| `redesign_position_temperature` | 1.0 | How much the choice of substituted positions is randomised between candidates, when `redesign_max_positions` caps them. `0` always takes the most improving positions and so returns near-identical candidates; raise it to spread them. |
 | `mpnn_model` | `v_48_020` | Select the checkpoint filename stem in the chosen weight family. |
 | `mpnn_variant` | `negative` | Surface-charge preference: `neutral`, `negative` or `positive`. |
 | `mpnn_fix_linker` | true | Preserve linker residues identified by a multidomain design during redesign. |
 | `domain_linker_fix_cut` | 0.5 | Membership threshold used to decide which linker residues are held. |
 
 The supplied AlphaFold names are `model_1_multimer_v3` through `model_5_multimer_v3`, and `model_1_ptm`, `model_2_ptm`. Candidate confidence is averaged over validation models; structural measurements use the first model's coordinates. A candidate that cannot recover its thresholds may stop validation early. See [candidate records](outputs.md#reading-the-tables).
+
+### Redesigning a sequence you already have
+
+`mpnn_redesign` starts from sequences written under `binder_sequences` rather than designing from scratch. It switches every gradient stage off, so each sequence is folded once, judged on the campaign's `_final` filters, and then handed to the usual ProteinMPNN candidate loop; each candidate is refolded by the validation ensemble and scored against the full battery. `Binder_Mutations` records how many substitutions each candidate carries. The three useful settings of `redesign_max_positions` are:
+
+| `redesign_max_positions` | What you get |
+| --- | --- |
+| `null` (default) | Unconstrained redesigns of the given fold — a candidate may differ at many positions. |
+| `2` | Double mutants. MPNN samples the whole designable binder, then all but its two most improving substitutions revert. Raise `sequence_candidates` for coverage, and `redesign_position_temperature` to spread which positions are chosen. |
+| `0` | Evaluation only: the given sequence comes back unchanged as a candidate of its own, so a panel of sequences is folded, refolded and scored without generating anything. Set `sequence_candidates: 1`, since every candidate would otherwise be the same sequence. |
+
+The number of trajectories defaults to one per given sequence, and `number_of_final_designs` to `sequence_candidates` per sequence, so that a run stops only once every candidate it was asked to generate has been generated: the accepted count is the campaign's other stop condition, and left lower it would end the run with parents never redesigned at all. It is therefore a ceiling rather than a request, and nothing distributes it per sequence, so one prolific parent can take the whole allowance. The trajectory count is the budget that matters here. `redesign_interface` keeps its `false` default, so the interface of the sequence you gave is held and substitutions land away from it. Set `redesign_interface: true`, as the redesign examples do, to put the interface itself in play: it is usually the part worth redesigning, and the substitution cap rather than a held interface is what keeps a candidate close to what you gave it.
 
 ## Biological options
 
@@ -162,6 +177,7 @@ The supplied AlphaFold names are `model_1_multimer_v3` through `model_5_multimer
 | `termini_together` / `--termini-together` | Bring the chain ends together; default final distance ceiling 10 Å. |
 | `termini_accessible` / `--termini-accessible` | Orient both ends away from the target. |
 | `forced_targeting` / `--forced-targeting` | Focus contact on a declared structured epitope; default hotspot coverage floor 0.5. |
+| `mpnn_redesign` / `--mpnn-redesign` | Redesign binder sequences given under `binder_sequences` instead of designing from scratch: no gradient stages, the whole binder designable, and every candidate refolded. |
 
 These booleans default to false. They select both objectives and associated thresholds, which explicit settings can override. Sequence and geometric proxies are not measurements of immunogenicity, serum half-life or binding affinity.
 

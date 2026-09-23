@@ -127,12 +127,20 @@ def validation_target_states(design_settings: BinderDesignSettings, target_state
 def sampled_binder_length(binder_lengths: tuple[int, ...] | None, length_random_key: Array) -> int:
     return 0 if binder_lengths is None else int(jax.random.choice(length_random_key, jnp.asarray(binder_lengths)))
 
+def sampled_binder_parent(binder_sequences: dict[str, str], length_random_key: Array) -> str:
+    parent_names = sorted(binder_sequences)
+    return parent_names[int(jax.random.choice(length_random_key, len(parent_names)))]
+
 def prepare_binder_chains(design_settings: BinderDesignSettings, key: Array) -> dict[str, Protein]:
     #one key for every chain, for multi-chain binders
     length_random_key, binder_random_key = jax.random.split(key)
     binder_lengths = design_settings.binder.lengths
     binder_length = sampled_binder_length(binder_lengths, length_random_key)
-    if design_settings.binder.scaffold:
+    if design_settings.binder.sequences:
+        parent_name = sampled_binder_parent(design_settings.binder.sequences, length_random_key)
+        parent = Protein.from_binder_sequence(parent_name, design_settings.binder.sequences[parent_name])
+        binder = {chain_name: parent for chain_name in design_settings.binder_chains}
+    elif design_settings.binder.scaffold:
         scaffold_chains = structure_chain_names(design_settings.binder.scaffold)
         scaffold = Protein.from_structure(design_settings.binder.scaffold, chains=','.join(scaffold_chains))
         seeded_scaffold_chains = [scaffold_chains[index % len(scaffold_chains)] for index in range(len(design_settings.binder_chains))]
@@ -147,6 +155,9 @@ def prepare_binder_chains(design_settings: BinderDesignSettings, key: Array) -> 
             biased_sequence = biased_sequence.at[:, AMINO_ACIDS.index(amino_acid)].add(bias)
         for amino_acid in design_settings.binder.omitted_amino_acids:
             biased_sequence = biased_sequence.at[:, AMINO_ACIDS.index(amino_acid)].set(OMITTED_AMINO_ACID_LOGIT)
+        #a sequence that was given keeps its own residues: bias steers what a position can become, never what it already is
+        given_identity = has_residue_flag(protein.flags, ResidueFlags.SEQUENCE)[:, None] & jax.nn.one_hot(protein.sequence.argmax(-1), protein.sequence.shape[-1], dtype=bool)
+        biased_sequence = jnp.where(given_identity, protein.sequence, biased_sequence)
         #designed residues only, to hold a fold conditioning scaffold's framework
         sequence = jnp.where(has_residue_flag(protein.flags, ResidueFlags.DESIGN)[:, None], biased_sequence, protein.sequence)
         binder[chain_name] = protein.replace(sequence=sequence, flags=protein.flags | int(ResidueFlags.CYCLIC) if design_settings.settings.get('cyclize_peptide') else protein.flags)
@@ -157,7 +168,9 @@ def design_residue_count(settings: dict) -> int:
     bucket_size = campaign_length_bucket(settings)
     #longest_crop: for disordered targets only
     targets = prepare_targets(design_settings, longest_crop=True)
-    if design_settings.binder.scaffold:
+    if design_settings.binder.sequences:
+        binder_length = padded_prediction_length(max(len(sequence) for sequence in design_settings.binder.sequences.values()), bucket_size) * design_settings.binder.copies
+    elif design_settings.binder.scaffold:
         longest_edits = re.sub(r'\(([^)]+)\)', lambda match: f'({max(parse_residue_length_choices(match.group(1)))})', design_settings.binder.scaffold_edits)
         design_settings = replace(design_settings, binder=replace(design_settings.binder, scaffold_edits=longest_edits))
         binder_length = sum(padded_prediction_length(len(protein), bucket_size) for protein in prepare_binder_chains(design_settings, jax.random.PRNGKey(design_settings.seed)).values())
@@ -170,6 +183,8 @@ def sampled_trajectory_values(design_settings: BinderDesignSettings, key: Array)
     trajectory_seed = int(jax.random.randint(conformation_random_key, (), 0, 2 ** 30))
     binder_chains = prepare_binder_chains(design_settings, binder_initialization_key)
     drawn = {'binder_length': sum(len(protein) for protein in binder_chains.values()), 'trajectory_seed': trajectory_seed, **sampled_loss_weights(design_settings.settings, trajectory_seed)}
+    if design_settings.binder.sequences:
+        drawn['binder_parent'] = sampled_binder_parent(design_settings.binder.sequences, jax.random.split(binder_initialization_key)[0])
     if design_settings.binder.scaffold:
         drawn['conformation.binder_scaffold'] = ''.join(target_conformation_fingerprint(protein) for protein in binder_chains.values())
     return (drawn, prepare_targets(design_settings, trajectory_seed))

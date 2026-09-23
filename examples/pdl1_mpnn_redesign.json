@@ -1,0 +1,16 @@
+{
+  "target": "hPDL1",
+  "campaign_name": "pdl1_redesign",
+  "mpnn_redesign": true,
+  "binder_sequences": {
+    "pdl1_parent": "SAEMKEVEEKFEKVKKAIEEEAKKTGDEELLWIIRVYENILNFMKSKPWFTPEHLEWLVKELARWSPEAQKVLE"
+  },
+  "redesign_interface": true,
+  "sequence_candidates": 20,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/pdl1_mpnn_redesign",
+  "aa_bias": {
+    "C": 0
+  }
+}

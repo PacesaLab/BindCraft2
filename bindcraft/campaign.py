@@ -144,6 +144,8 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
     campaign_progress = CampaignProgress(project_folder, requested_designs, max_trajectories)
     compiled_length_buckets: set[int] = set()
     compiling_next_length: threading.Thread | None = None
+    #read once, before any trajectory narrows the settings down to the one sequence it redesigns
+    campaign_binder_sequences = design_settings.binder.sequences
     worker_label = f" | worker {os.environ['BINDCRAFT_WORKER_ID']}" if 'BINDCRAFT_WORKER_ID' in os.environ else ''
     if speaks_for_the_campaign() and len(design_settings.prepared_states) > 1:
         print(target_frame_report(prepare_targets(design_settings), frame_holding_target(design_settings)), flush=True)
@@ -158,6 +160,10 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
         tuned_settings, desperation = desperate_settings(tuned_settings, project_folder)
         if desperation:
             print(desperation, flush=True)
+        #one trajectory per sequence that was given, in name order, so every one is folded and redesigned exactly once
+        if campaign_binder_sequences:
+            parent_name = sorted(campaign_binder_sequences)[(trajectory_number - 1) % len(campaign_binder_sequences)]
+            tuned_settings = {**tuned_settings, 'binder_sequences': {parent_name: campaign_binder_sequences[parent_name]}}
         design_settings = build_design_settings(tuned_settings) if tuned_settings != design_settings.settings else design_settings
         trajectory_random_key = jax.random.fold_in(key, trajectory_number)
         for prediction_model in (alphafold_model, validation_model, mpnn_model):
@@ -187,7 +193,7 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
         metrics = scored_trajectory_metrics(design_settings, protein_states, predictions) if failed_stage is None else {}
         if settings.get('save_design_trajectory') and predictions:
             write_trajectory_design(design_settings, protein_states, predictions, trajectory_directory, receptor_chains)
-        append_campaign_metrics(trajectories_csv, target_ordered_row({'design': name, 'trajectory': trajectory_number, 'length': drawn['binder_length'], 'hash': identity, 'terminated': failed_stage or '', 'autotuned': autotuned, **drawn_weight_stamp(drawn), **metrics, 'Timing': timing_stamp(worker=os.environ.get('BINDCRAFT_WORKER_ID', '0'), start=design_started, design=time.time() - design_started, compiled=int(compiled_fresh)), **(metadata or {})}, target_order))
+        append_campaign_metrics(trajectories_csv, target_ordered_row({'design': name, 'trajectory': trajectory_number, 'length': drawn['binder_length'], **({'binder_parent': drawn['binder_parent']} if 'binder_parent' in drawn else {}), 'hash': identity, 'terminated': failed_stage or '', 'autotuned': autotuned, **drawn_weight_stamp(drawn), **metrics, 'Timing': timing_stamp(worker=os.environ.get('BINDCRAFT_WORKER_ID', '0'), start=design_started, design=time.time() - design_started, compiled=int(compiled_fresh)), **(metadata or {})}, target_order))
         campaign_progress.record_trajectory_outcome(failed_stage)
         accepted_from_trajectory = 0
         if failed_stage is None and mpnn_model is not None:
@@ -261,7 +267,7 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     multi_chain_binders = (design_settings.binder_chains,) if design_settings.binder.copies > 1 and design_settings.oligomer_tie == 'symmetric' else ()  #for oligomers
     alphafold_model = AlphaFoldDesignModel(presets=selected_models.design_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('design_recycles', DEFAULT_SETTINGS['design_recycles']), models=selected_models.design_models, cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, length_bucket_size=length_bucket_size, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
     refuse_predictor_without_distogram(settings, alphafold_model)
-    mpnn_model = ProteinMPNNSequenceModel(data_dir=mpnn_weights, max_cache_size=16, model_name=settings.get('mpnn_model', 'v_48_020'), variant=settings.get('mpnn_variant', 'negative'), omitted_amino_acids=design_settings.binder.omitted_amino_acids, amino_acid_bias=design_settings.binder.amino_acid_bias, multi_chain_binders=multi_chain_binders, length_bucket_size=length_bucket_size, target_pad_length=target_pad_length) if mpnn_weights and (not settings.get('trajectory_only')) else None
+    mpnn_model = ProteinMPNNSequenceModel(data_dir=mpnn_weights, max_cache_size=16, model_name=settings.get('mpnn_model', 'v_48_020'), variant=settings.get('mpnn_variant', 'negative'), omitted_amino_acids=design_settings.binder.omitted_amino_acids, amino_acid_bias=design_settings.binder.amino_acid_bias, multi_chain_binders=multi_chain_binders, length_bucket_size=length_bucket_size, target_pad_length=target_pad_length, redesign_max_positions=settings.get('redesign_max_positions'), redesign_position_temperature=settings.get('redesign_position_temperature', 1.0)) if mpnn_weights and (not settings.get('trajectory_only')) else None
     build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
     validation_model = build_validation_model(selected_models.validation_models) if mpnn_model else None
     if mpnn_model is None and max_trajectories is None:

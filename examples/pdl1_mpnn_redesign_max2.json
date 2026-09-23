@@ -1,0 +1,19 @@
+{
+  "target": "hPDL1",
+  "campaign_name": "pdl1_redesign_max2",
+  "mpnn_redesign": true,
+  "binder_sequences": {
+    "pdl1_parent": "SAEMKEVEEKFEKVKKAIEEEAKKTGDEELLWIIRVYENILNFMKSKPWFTPEHLEWLVKELARWSPEAQKVLE"
+  },
+  "redesign_max_positions": 2,
+  "redesign_position_temperature": 1.0,
+  "redesign_interface": true,
+  "sequence_candidates": 40,
+  "kept_sequences": 40,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/pdl1_mpnn_redesign_max2",
+  "aa_bias": {
+    "C": 0
+  }
+}

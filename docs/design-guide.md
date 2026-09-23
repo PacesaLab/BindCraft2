@@ -45,6 +45,54 @@ list you actually inspect.
 Design-time metrics (from stage 1) are optimistic by construction. **Trust the validation numbers
 (stage 3), not the trajectory numbers.**
 
+### Starting from a binder you already have
+
+`binder_sequences` initialises trajectories from sequences you supply rather than from noise. 
+
+Adding `mpnn_redesign: true` (`--mpnn-redesign`) switches the gradient stages off on top of that, 
+so each sequence is folded once and judged on the campaign's `_final` filters, then stages 2–4 run 
+exactly as above: MPNN draws candidates off that fold, each is refolded from scratch and scored, 
+and the survivors are ranked.
+
+```json
+{
+  "target": "hPDL1",
+  "mpnn_redesign": true,
+  "binder_sequences": { "parent": "SAEMKEVEEKFEKVKKAIE..." },
+  "redesign_max_positions": 2,
+  "redesign_interface": true,
+  "sequence_candidates": 40
+}
+```
+
+**More designs from a good one.** `mpnn_redesign: true` with no cap draws unconstrained MPNN redesigns of
+the fold, for when a design is promising but misses a downstream criterion.
+[pdl1_mpnn_redesign.json](../examples/pdl1_mpnn_redesign.json).
+
+**Local sequence exploration.** `redesign_max_positions: 2` makes every candidate a double mutant, 
+instead of redesigning all binder positions. The positions are picked at random, biased towards the ones 
+MPNN scores worst, with `redesign_position_temperature` setting how widely the picks spread over candidates. 
+Use it around a binder that is already experimentally validated. [pdl1_mpnn_redesign_max2.json](../examples/pdl1_mpnn_redesign_max2.json).
+
+**Evaluating sequences you already have.** `redesign_max_positions: 0` generates nothing: every sequence in
+`binder_sequences` is kept as written, folded, refolded by the validation ensemble and scored, 
+so a panel of custom mutants can be judged on the same terms as a design.
+[pdl1_mpnn_redesign_evaluation.json](../examples/pdl1_mpnn_redesign_evaluation.json).
+
+**Seeded de novo design.** `binder_sequences` without `mpnn_redesign` runs the gradient stages in full from
+your sequence instead of from noise. Nothing holds the design near the seed, so treat it as de novo design
+with a head start, and raise `max_trajectories`: a given sequence defaults it to one trajectory per
+sequence, which suits a redesign run but stops a gradient run after a single design.
+[pdl1_seeded_design.json](../examples/pdl1_seeded_design.json).
+
+`redesign_interface: true` is worth adding in redesign mode, as above: without it the interface of the
+sequence you gave is held and every substitution lands elsewhere. `Binder_Mutations` in the output tables
+says how far each candidate moved from its parent. The seed fixes the length: `binder_lengths` is replaced
+by the lengths of the sequences you gave, whether it came from you or from a modality preset, so
+`--modality binder` stays usable with a seed. A scaffold modality is refused instead, since a framework and
+a given sequence cannot both decide what the binder starts as. See
+[Models and sequence redesign](reference.md#models-and-sequence-redesign).
+
 ---
 
 ## 2. Setting up a design
@@ -383,6 +431,7 @@ than designing something incoherent:
 | `homo_oligomer` (`copies` > 1) with `multidomain` | the domain split doesn't engage across identical oligomer copies |
 | a **FASTA / disordered target** with `forced_targeting` or `coldspots` | both need residue numbers and a resolved backbone that a sequence target doesn't carry |
 | `induced_fit` with **detargeting** | induced fit freezes one bound structure to compare the free state against, so it designs against a single target |
+| `binder_sequences` with a **scaffold modality** | both decide what the binder starts as, and a framework cannot be seeded with a sequence of its own. Refused outright rather than silently ignored. A `binder_lengths` is not refused: the given sequences replace it, since they already fix the length |
 
 Everything else is fair game — targeting options (hotspots, coldspots, forced targeting, detargeting),
 developability properties (humanize, protease_stable, disulfide_staple), termini controls and topology
