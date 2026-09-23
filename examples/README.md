@@ -59,6 +59,7 @@ The other examples below demonstrate explicit settings for particular experiment
 | [pdl1_protease_stability.json](pdl1_protease_stability.json) | Protease resistance | Penalise cleavage motifs, exposed-loop proxies and exposed termini. |
 | [pdl1_termini_distance.json](pdl1_termini_distance.json) | Nearby termini | Pull the chain ends together and require an end-to-end distance of at most 10 Å. |
 | [pdl1_termini_orientation.json](pdl1_termini_orientation.json) | Accessible termini | Orient both chain ends away from the target. |
+| [pdl1_seeded_design.json](pdl1_seeded_design.json) | Seeded de novo design | Start the gradient stages from a binder sequence you already have rather than from noise, at the length of that sequence. |
 | [pdl1_mpnn_redesign.json](pdl1_mpnn_redesign.json) | Redesign a given sequence | Start from a binder sequence instead of designing one: no gradient stages, 20 unconstrained ProteinMPNN redesigns of its fold, each refolded and scored. |
 | [pdl1_mpnn_redesign_max2.json](pdl1_mpnn_redesign_max2.json) | Redesign, at most 2 substitutions | The same, with `redesign_max_positions: 2` so every candidate is a double mutant of the sequence given, and 40 candidates for coverage. |
 | [pdl1_mpnn_redesign_evaluation.json](pdl1_mpnn_redesign_evaluation.json) | Evaluate given sequences | `redesign_max_positions: 0` generates nothing: a parent and four point mutants are each folded, refolded by the validation ensemble and scored against the full battery. |

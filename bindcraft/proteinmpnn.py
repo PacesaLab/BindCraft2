@@ -104,12 +104,15 @@ class ProteinMPNNSequenceModel(ProteinPredictor):
                 if self.redesign_max_positions is None:
                     selected_amino_acids = jnp.where(redesigned_residue_mask, sampled_amino_acids, original_amino_acids)
                 else:
-                    #only the most improving substitutions are applied
+                    #only the most improving substitutions are applied, counted per tied group so copies of one protomer keep the same substitutions
                     residue_positions = jnp.arange(sampled_amino_acids.shape[0])
                     improvement = amino_acid_log_probabilities[residue_positions, sampled_amino_acids] - amino_acid_log_probabilities[residue_positions, original_amino_acids]
-                    ranked = improvement if not self.redesign_position_temperature else improvement / self.redesign_position_temperature + jax.random.gumbel(jax.random.fold_in(key, 0), improvement.shape)
-                    substituted = redesigned_residue_mask & (sampled_amino_acids != original_amino_acids)
-                    kept = jax.lax.top_k(jnp.where(substituted, ranked, -jnp.inf), min(self.redesign_max_positions, sampled_amino_acids.shape[0]))[1]
+                    capped_groups = residue_positions[:, None] if grouped_residues is None else grouped_residues
+                    group_improvement = improvement[capped_groups].mean(-1)
+                    ranked = group_improvement if not self.redesign_position_temperature else group_improvement / self.redesign_position_temperature + jax.random.gumbel(jax.random.fold_in(key, 0), group_improvement.shape)
+                    substituted = (redesigned_residue_mask & (sampled_amino_acids != original_amino_acids))[capped_groups].all(-1)
+                    kept_groups = jax.lax.top_k(jnp.where(substituted, ranked, -jnp.inf), min(self.redesign_max_positions, capped_groups.shape[0]))[1]
+                    kept = capped_groups[kept_groups].reshape(-1)
                     selected_amino_acids = original_amino_acids.at[kept].set(sampled_amino_acids[kept])
                 residue_negative_log_likelihood = -jnp.take_along_axis(amino_acid_log_probabilities, selected_amino_acids[:, None], axis=-1)[:, 0]
                 sequence_negative_log_likelihood = (residue_negative_log_likelihood * resolved_ca_mask).sum() / (resolved_ca_mask.sum() + 1e-08)

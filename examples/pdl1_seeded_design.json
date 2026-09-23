@@ -1,0 +1,14 @@
+{
+  "target": "hPDL1",
+  "campaign_name": "pdl1_seeded",
+  "binder_sequences": {
+    "pdl1_parent": "SAEMKEVEEKFEKVKKAIEEEAKKTGDEELLWIIRVYENILNFMKSKPWFTPEHLEWLVKELARWSPEAQKVLE"
+  },
+  "number_of_final_designs": 10,
+  "min_iptm_final": 0.6,
+  "min_monomer_plddt_final": 0.7,
+  "project_folder": "results/pdl1_seeded_design",
+  "aa_bias": {
+    "C": 0
+  }
+}

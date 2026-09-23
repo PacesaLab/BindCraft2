@@ -141,6 +141,7 @@ class ModalityCheck(NamedTuple):
 class ConfigurationRequest(NamedTuple):
     overrides: dict
     loss_settings: dict
+    written: dict = {}  #the campaign file and the command line alone, before any preset was layered under them
 
 class CampaignFeature(NamedTuple):
     name: str
@@ -240,11 +241,27 @@ def terminus_away_feature(terminus: str) -> 'CampaignFeature':
 def mutation_check_parameters(settings: dict) -> dict:
     return {'parent_sequences': tuple(resolve_binder_sequences(settings).values())}
 
-def configure_mpnn_redesign(settings: dict, request: ConfigurationRequest) -> None:
-    #one trajectory per sequence that was given, so every one is folded and redesigned exactly once
+def configure_given_binder_sequences(settings: dict, request: ConfigurationRequest) -> None:
+    #a sequence that was given fixes its own length, and no stage can insert or delete a residue
+    #a length a modality preset carries is incidental, so only one that was asked for is refused
+    if request.written.get('binder_lengths'):
+        raise NotImplementedError('binder_sequences fixes the binder length: designing a range of lengths from a sequence that is given is not implemented. Remove binder_lengths, or remove binder_sequences.')
+    #a scaffold, unlike a length, is never incidental: a modality that carries one was asked for by name
+    if settings.get('binder_scaffold'):
+        raise NotImplementedError('binder_sequences and binder_scaffold both decide what the binder starts as: seeding a scaffold framework with a sequence that is given is not implemented. Drop one of them, or the scaffold modality that supplies it.')
+    #one trajectory per sequence that was given, so every one is folded and designed from exactly once
     parent_count = len(resolve_binder_sequences(settings))
     settings.setdefault('max_trajectories', parent_count)
     settings.setdefault('number_of_final_designs', parent_count * int(settings.get('sequence_candidates', 1) or 1))
+
+def given_binder_sequences_note(settings: dict) -> str:
+    parents = resolve_binder_sequences(settings)
+    designed = 'redesigned by ProteinMPNN alone' if settings.get('mpnn_redesign') else 'carried into the gradient stages as their starting sequence'
+    return f"given binder sequence: {len(parents)} of {'/'.join(str(len(sequence)) for sequence in parents.values())} residue(s), one trajectory each, {designed}"
+
+def configure_mpnn_redesign(settings: dict, request: ConfigurationRequest) -> None:
+    if not resolve_binder_sequences(settings):
+        raise ValueError('mpnn_redesign redesigns the sequences written under binder_sequences, and none were given')
 
 def mpnn_redesign_note(settings: dict) -> str:
     parents = resolve_binder_sequences(settings)
@@ -271,11 +288,11 @@ CAMPAIGN_FEATURES = (
                                ('multi-chain binder', 'a scaffold defines one binder chain, so it cannot also be copied into an oligomer'),
                                ('fold switching', 'a framework fixes the fold, so it cannot also be told to switch fold'),
                                ('mixed topology', 'a framework fixes the fold, so it cannot also be told to change its secondary structure'))),
+    CampaignFeature('given binder sequence', lambda settings: bool(settings.get('binder_sequences')), shorthand='seeded', switch='binder_sequences',
+                    configure=configure_given_binder_sequences, note=given_binder_sequences_note,
+                    checks=(ModalityCheck('Binder_Mutations', 0.0, True, parameters=mutation_check_parameters),)),  #recorded, never rejecting: how far a design moved is worth reading whether or not it is required
     CampaignFeature('MPNN redesign', lambda settings: bool(settings.get('mpnn_redesign')), shorthand='redesign', switch='mpnn_redesign', configure=configure_mpnn_redesign,
-                    checks=(ModalityCheck('Binder_Mutations', 0.0, True, parameters=mutation_check_parameters),),  #recorded, never rejecting: how far a candidate moved is worth reading whether or not it is required
-                    note=mpnn_redesign_note,
-                    conflicts=(('fold conditioning', 'a redesign starts from a sequence that is given, so there is no scaffold to rebuild'),
-                               ('multi-chain binder', 'the substitution cap counts residues rather than tied groups, so it would break the tie between copies'))),
+                    note=mpnn_redesign_note),
     CampaignFeature('forced targeting', lambda settings: bool(settings.get('forced_targeting')), shorthand='forced', switch='forced_targeting', configure=configure_focused_epitope,
                     note=lambda settings: f"forced targeting: everything outside {settings.get('forced_targeting_shell', 'the default')} Angstrom of the hotspots rebuilt as lysine"),
     CampaignFeature('multidomain binder', lambda settings: bool(settings.get('weights_multidomain')), configure=configure_multidomain,
@@ -469,6 +486,7 @@ def reject_unrecognized_settings(overrides: dict) -> None:
         raise ValueError('unrecognized campaign settings: ' + ', '.join(rejected))
 
 def load_settings(overrides: dict | None=None) -> dict:
+    written = copy.deepcopy(overrides or {})
     overrides = campaign_over_presets(copy.deepcopy(overrides or {}))
     reject_unrecognized_settings(overrides)
     reject_percentage_thresholds(overrides)
@@ -496,7 +514,7 @@ def load_settings(overrides: dict | None=None) -> dict:
         for name, value in {'save_failed_refolds': False, 'save_failed_trajectories': False, 'save_binder_monomers': False, 'save_design_animations': False, 'save_design_frames': False, 'save_design_sequences': False, 'save_design_trajectory': False, 'save_loss_plots': False}.items():
             if name not in overrides:
                 settings[name] = value
-    configure_campaign_features(settings, ConfigurationRequest(overrides, loss_settings))
+    configure_campaign_features(settings, ConfigurationRequest(overrides, loss_settings, written))
     for setting_name, filter_name in FINAL_CONFIDENCE_FILTERS.items():
         if setting_name in overrides and isinstance(settings['filters'], dict) and (filter_name not in overrides.get('filters', {})):
             settings['filters'][filter_name]['threshold'] = float(overrides[setting_name])

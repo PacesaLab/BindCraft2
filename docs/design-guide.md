@@ -70,6 +70,15 @@ gave and generate nothing at all. `redesign_interface: true` is worth adding, as
 interface of the sequence you gave is held and every substitution lands elsewhere. `Binder_Mutations` in
 the output tables says how far each candidate moved from its parent. See [Models and sequence redesign](reference.md#models-and-sequence-redesign).
 
+Leaving `mpnn_redesign` out but keeping `binder_sequences` is a different, also useful thing: the gradient
+stages run in full, starting from the sequence you gave instead of from noise, as
+[pdl1_seeded_design.json](../examples/pdl1_seeded_design.json) does. Nothing holds a design near that
+seed unless you set `redesign_max_positions`, so treat it as de novo design with a head start, and read
+`Binder_Mutations` to see how far it travelled. Either way the seed fixes the length, so writing
+`binder_lengths` alongside `binder_sequences` is refused, as is a scaffold modality, rather than one of
+them being quietly ignored. A length a modality preset happens to carry is not refused — the seed simply
+decides the length instead — so `--modality binder` stays usable with a seed.
+
 ---
 
 ## 2. Setting up a design
@@ -408,7 +417,7 @@ than designing something incoherent:
 | `homo_oligomer` (`copies` > 1) with `multidomain` | the domain split doesn't engage across identical oligomer copies |
 | a **FASTA / disordered target** with `forced_targeting` or `coldspots` | both need residue numbers and a resolved backbone that a sequence target doesn't carry |
 | `induced_fit` with **detargeting** | induced fit freezes one bound structure to compare the free state against, so it designs against a single target |
-| `mpnn_redesign` with a **scaffold modality** or `homo_oligomer` (`copies` > 1) | a redesign starts from a sequence you gave, so there is no scaffold to rebuild; and its substitution cap counts residues rather than tied groups, so it would break the tie between oligomer copies |
+| `binder_sequences` with a **scaffold modality**, or with a `binder_lengths` you write yourself | both decide what the binder starts as: a sequence you gave already fixes the sequence and its length, and no stage can insert or delete a residue. Refused outright rather than silently ignored |
 
 Everything else is fair game — targeting options (hotspots, coldspots, forced targeting, detargeting),
 developability properties (humanize, protease_stable, disulfide_staple), termini controls and topology
