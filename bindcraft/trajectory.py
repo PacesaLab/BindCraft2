@@ -321,6 +321,7 @@ def run_trajectory(design_settings: BinderDesignSettings, design_model: Differen
     protein_states, predictions, losses = trajectory.protein_states, trajectory.predictions, trajectory.losses
     if not stage_plan and not design_stage_rounds(settings)['mutate']:
         #nothing designed anything, so fold what was given: without this the final filters below read every metric as not measured
+        design_model.dropout = False  #no stage set it, and the fold the redesign decodes off should be the clean one, as after harden
         predictions = design_model.predict(protein_states)
     if failed_stage is None and design_stage_rounds(settings)['mutate']:
         protein_states, predictions, failed_stage = run_mutation_polish(design_settings, design_model, protein_states, wild_type_states, losses, trajectory.binder_alone_reference, multi_chain_binders, mutation_random_key, conformation_random_key, target_names, recorder)
