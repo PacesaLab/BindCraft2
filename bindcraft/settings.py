@@ -249,7 +249,9 @@ def configure_given_binder_sequences(settings: dict, request: ConfigurationReque
     #one trajectory per sequence that was given, so every one is folded and designed from exactly once
     parent_count = len(resolve_binder_sequences(settings))
     settings.setdefault('max_trajectories', parent_count)
-    settings.setdefault('number_of_final_designs', parent_count * int(settings.get('sequence_candidates', 1) or 1))
+    #the accepted count is what every trajectory could contribute at most, so it stops nothing: the trajectory budget above is the limit that matters here
+    kept_per_trajectory = min(int(settings.get('kept_sequences', 1) or 1), int(settings.get('sequence_candidates', 1) or 1))
+    settings.setdefault('number_of_final_designs', parent_count * kept_per_trajectory)
 
 def given_binder_sequences_note(settings: dict) -> str:
     parents = resolve_binder_sequences(settings)
