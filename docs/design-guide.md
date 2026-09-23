@@ -47,9 +47,12 @@ Design-time metrics (from stage 1) are optimistic by construction. **Trust the v
 
 ### Starting from a binder you already have
 
-If you already have a binder sequence — an accepted design, a hit from the bench, a panel of point
-mutants — you can skip stage 1 entirely. Write the sequences under `binder_sequences` and add
-`mpnn_redesign: true`:
+`binder_sequences` initialises trajectories from sequences you supply rather than from noise. 
+
+Adding `mpnn_redesign: true` (`--mpnn-redesign`) switches the gradient stages off on top of that, 
+so each sequence is folded once and judged on the campaign's `_final` filters, then stages 2–4 run 
+exactly as above: MPNN draws candidates off that fold, each is refolded from scratch and scored, 
+and the survivors are ranked.
 
 ```json
 {
@@ -62,22 +65,32 @@ mutants — you can skip stage 1 entirely. Write the sequences under `binder_seq
 }
 ```
 
-Each sequence is folded once and judged on the campaign's `_final` filters, then stages 2–4 run
-exactly as above: MPNN draws candidates off that fold, each is refolded from scratch and scored, and
-the survivors are ranked. `redesign_max_positions` decides how far a candidate may move — leave it out
-for unconstrained redesigns, set `2` for double mutants, or set `0` to fold and score the sequences you
-gave and generate nothing at all. `redesign_interface: true` is worth adding, as above: without it the
-interface of the sequence you gave is held and every substitution lands elsewhere. `Binder_Mutations` in
-the output tables says how far each candidate moved from its parent. See [Models and sequence redesign](reference.md#models-and-sequence-redesign).
+**More designs from a good one.** `mpnn_redesign: true` with no cap draws unconstrained MPNN redesigns of
+the fold, for when a design is promising but misses a downstream criterion.
+[pdl1_mpnn_redesign.json](../examples/pdl1_mpnn_redesign.json).
 
-Leaving `mpnn_redesign` out but keeping `binder_sequences` is a different, also useful thing: the gradient
-stages run in full, starting from the sequence you gave instead of from noise, as
-[pdl1_seeded_design.json](../examples/pdl1_seeded_design.json) does. Nothing holds a design near that
-seed unless you set `redesign_max_positions`, so treat it as de novo design with a head start, and read
-`Binder_Mutations` to see how far it travelled. Either way the seed fixes the length, so writing
-`binder_lengths` alongside `binder_sequences` is refused, as is a scaffold modality, rather than one of
-them being quietly ignored. A length a modality preset happens to carry is not refused — the seed simply
-decides the length instead — so `--modality binder` stays usable with a seed.
+**Local sequence exploration.** `redesign_max_positions: 2` makes every candidate a double mutant, 
+instead of redesigning all binder positions. The positions are picked at random, biased towards the ones 
+MPNN scores worst, with `redesign_position_temperature` setting how widely the picks spread over candidates. 
+Use it around a binder that is already experimentally validated. [pdl1_mpnn_redesign_max2.json](../examples/pdl1_mpnn_redesign_max2.json).
+
+**Evaluating sequences you already have.** `redesign_max_positions: 0` generates nothing: every sequence in
+`binder_sequences` is kept as written, folded, refolded by the validation ensemble and scored, 
+so a panel of custom mutants can be judged on the same terms as a design.
+[pdl1_mpnn_redesign_evaluation.json](../examples/pdl1_mpnn_redesign_evaluation.json).
+
+**Seeded de novo design.** `binder_sequences` without `mpnn_redesign` runs the gradient stages in full from
+your sequence instead of from noise. Nothing holds the design near the seed, so treat it as de novo design
+with a head start, and raise `max_trajectories`: a given sequence defaults it to one trajectory per
+sequence, which suits a redesign run but stops a gradient run after a single design.
+[pdl1_seeded_design.json](../examples/pdl1_seeded_design.json).
+
+`redesign_interface: true` is worth adding in redesign mode, as above: without it the interface of the
+sequence you gave is held and every substitution lands elsewhere. `Binder_Mutations` in the output tables
+says how far each candidate moved from its parent. The seed fixes the length, so a `binder_lengths` you
+write yourself is refused, as is a scaffold modality, rather than one of them being quietly ignored — a
+length a modality preset happens to carry is not, so `--modality binder` stays usable with a seed. See
+[Models and sequence redesign](reference.md#models-and-sequence-redesign).
 
 ---
 

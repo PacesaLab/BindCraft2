@@ -4,7 +4,10 @@
   "binder_sequences": {
     "pdl1_parent": "SAEMKEVEEKFEKVKKAIEEEAKKTGDEELLWIIRVYENILNFMKSKPWFTPEHLEWLVKELARWSPEAQKVLE"
   },
+  "max_trajectories": 50,
   "number_of_final_designs": 10,
+  "sequence_candidates": 10,
+  "kept_sequences": 2,
   "min_iptm_final": 0.6,
   "min_monomer_plddt_final": 0.7,
   "project_folder": "results/pdl1_seeded_design",
