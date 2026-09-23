@@ -292,7 +292,7 @@ rarer** — add only what your experiment needs. The overall roles:
 | Property / objective | Pushes the design toward | Rejects unless |
 | --- | --- | --- |
 | `forced_targeting` | contact concentrated on the declared hotspots | ≥50% of hotspots contacted |
-| `humanize` | human-germline sequence + low predicted MHC anchor load | MHC anchor score under its ceiling |
+| `humanize` | human-germline sequence (*planned*) + low predicted MHC anchor load | MHC anchor score under its ceiling |
 | `disulfide_staple` | a geometrically valid disulfide (cysteine allowed) | ≥1 disulfide formed |
 | `protease_stable` | fewer protease-cleavage motifs, buried loops and termini | protease-site / exposed-loop / terminus-exposure scores under their ceilings |
 | `termini_accessible` | both chain ends angled away from the target | termini-away angle clears its floor |
@@ -316,16 +316,11 @@ validation. Requires a structured target and `hotspots`. *Caveat:* it steers **w
 lands, not how tightly it binds, and the trick runs only at design time — a design still has to clear
 the normal interface filters against the true target.
 
-**`humanize` — germline preference + T-cell-epitope proxy.** It biases the binder sequence toward
-**human-germline** residue preferences and scores it against a panel of common **HLA anchor motifs**
+**`humanize` — immunogenicity proxy.** In development, currently scores the designed sequence against a panel of common **MHC anchor motifs**
 (MHC class I: 13 common HLA-A/B alleles; MHC class II: common HLA-DRB1 alleles, weighted highest via
-`humanization_mhc2_weight` because class-II presentation drives the T-helper response behind anti-drug
-antibodies), penalising stretches that read as strong T-cell epitopes; the `MHC_Anchor_Score` filter
-caps that load. *Caveat:* this is a coarse **sequence-anchor proxy over a fixed allele panel** — not a
-validated immunogenicity assay (no MAPPs, no T-cell/ADA data, no netMHC-grade prediction). It trims
-obvious epitope liabilities; it does **not** establish that a binder or antibody is non-immunogenic —
-the designed CDRs are novel sequence, and real immunogenicity depends on antigen processing, the full
-patient allele repertoire, aggregation and dosing. Treat a low score as a proxy, not a clearance.
+`humanization_mhc2_weight`). 
+The corresponding filter is `MHC_Anchor_Score`. 
+*Caveat:* currently this is a coarse MHC presentation estimator over a fixed allele panel. It does **not** establish that a designed protein is non-immunogenic and should be treated as a proxy.
 
 **`protease_stable` — a small serum-protease panel plus a burial term.** It penalises predicted cleavage
 against four canonical proteases — **trypsin** (after K/R), **chymotrypsin** (after F/Y/W/L/M),

@@ -153,7 +153,7 @@ Add a compatible property as a command-line flag or a top-level JSON entry:
 | Property | Command-line flag | JSON entry |
 | --- | --- | --- |
 | **Focused epitope** — concentrate binding on named hotspots | `--forced-targeting` | `"forced_targeting": true` |
-| **Humanization** — favour human-like sequence features | `--humanize` | `"humanize": true` |
+| **Humanization** — favour human-like, lower immunogenicity, sequence features (*in development*) | `--humanize` | `"humanize": true` |
 | **Protease resistance** — reduce predicted cleavage susceptibility | `--protease-stable` | `"protease_stable": true` |
 | **Disulfide staple** — include a predicted disulfide bond | `--disulfide-staple` | `"disulfide_staple": true` |
 | **Mixed topology** — select for beta-sheet content and limit helicity | `--mixed-topology` | `"mixed_topology": true` |
