@@ -73,7 +73,7 @@ Metadata is a separate JSON object for author, project and other descriptive fie
 | `targets[].weight` | 1 | Relative importance of each target; a negative value also selects detargeting. |
 | `binder_lengths` | Preset or scaffold | `[80,80]` fixes 80 residues; `[60,100]` allows the inclusive range; `[60,80,100]` allows only those choices. Length is per copy for an oligomer. |
 | `binder_scaffold` | Unset | Supply an existing binder fold; overrides de novo length selection. |
-| `binder_sequences` | Unset | Supply binder sequences to start from, written `{"name": "SEQUENCE"}`. One trajectory per name, in name order, each at the length of its own sequence. Alone it seeds the gradient stages; with `mpnn_redesign` they are switched off and the sequence is only redesigned. A `binder_lengths` you write yourself, or a scaffold, is refused alongside it. |
+| `binder_sequences` | Unset | Supply binder sequences to start from, written `{"name": "SEQUENCE"}`. One trajectory per name, in name order, each at the length of its own sequence. Alone it seeds the gradient stages; with `mpnn_redesign` they are switched off and the sequence is only redesigned. `binder_lengths` is replaced by the lengths of these sequences, from wherever it came; a scaffold alongside it is refused. |
 | `mutate_positions` | Preset or unset | Select scaffold residues to redesign, resize or mark as binding/non-binding. |
 | `aa_bias` | Preset; `binder` excludes C | Amino-acid propensities: 1 neutral, 2 favoured, 0.4 disfavoured, 0 excluded. Applies to design and redesign. |
 | `copies` | 1; oligomer preset 2 | Number of binder copies in an assembly. |

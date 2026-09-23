@@ -87,9 +87,10 @@ sequence, which suits a redesign run but stops a gradient run after a single des
 
 `redesign_interface: true` is worth adding in redesign mode, as above: without it the interface of the
 sequence you gave is held and every substitution lands elsewhere. `Binder_Mutations` in the output tables
-says how far each candidate moved from its parent. The seed fixes the length, so a `binder_lengths` you
-write yourself is refused, as is a scaffold modality, rather than one of them being quietly ignored — a
-length a modality preset happens to carry is not, so `--modality binder` stays usable with a seed. See
+says how far each candidate moved from its parent. The seed fixes the length: `binder_lengths` is replaced
+by the lengths of the sequences you gave, whether it came from you or from a modality preset, so
+`--modality binder` stays usable with a seed. A scaffold modality is refused instead, since a framework and
+a given sequence cannot both decide what the binder starts as. See
 [Models and sequence redesign](reference.md#models-and-sequence-redesign).
 
 ---
@@ -430,7 +431,7 @@ than designing something incoherent:
 | `homo_oligomer` (`copies` > 1) with `multidomain` | the domain split doesn't engage across identical oligomer copies |
 | a **FASTA / disordered target** with `forced_targeting` or `coldspots` | both need residue numbers and a resolved backbone that a sequence target doesn't carry |
 | `induced_fit` with **detargeting** | induced fit freezes one bound structure to compare the free state against, so it designs against a single target |
-| `binder_sequences` with a **scaffold modality**, or with a `binder_lengths` you write yourself | both decide what the binder starts as: a sequence you gave already fixes the sequence and its length, and no stage can insert or delete a residue. Refused outright rather than silently ignored |
+| `binder_sequences` with a **scaffold modality** | both decide what the binder starts as, and a framework cannot be seeded with a sequence of its own. Refused outright rather than silently ignored. A `binder_lengths` is not refused: the given sequences replace it, since they already fix the length |
 
 Everything else is fair game — targeting options (hotspots, coldspots, forced targeting, detargeting),
 developability properties (humanize, protease_stable, disulfide_staple), termini controls and topology

@@ -141,7 +141,6 @@ class ModalityCheck(NamedTuple):
 class ConfigurationRequest(NamedTuple):
     overrides: dict
     loss_settings: dict
-    written: dict = {}  #the campaign file and the command line alone, before any preset was layered under them
 
 class CampaignFeature(NamedTuple):
     name: str
@@ -242,11 +241,9 @@ def mutation_check_parameters(settings: dict) -> dict:
     return {'parent_sequences': tuple(resolve_binder_sequences(settings).values())}
 
 def configure_given_binder_sequences(settings: dict, request: ConfigurationRequest) -> None:
-    #a sequence that was given fixes its own length, and no stage can insert or delete a residue
-    #a length a modality preset carries is incidental, so only one that was asked for is refused
-    if request.written.get('binder_lengths'):
-        raise NotImplementedError('binder_sequences fixes the binder length: designing a range of lengths from a sequence that is given is not implemented. Remove binder_lengths, or remove binder_sequences.')
-    #a scaffold, unlike a length, is never incidental: a modality that carries one was asked for by name
+    #a sequence that was given fixes its own length, and no stage can insert or delete a residue, so the lengths are the given ones whatever a preset or the campaign asked for
+    settings['binder_lengths'] = tuple(sorted({len(sequence) for sequence in resolve_binder_sequences(settings).values()}))
+    #a scaffold, unlike a length, cannot be reconciled: it decides what the binder starts as, and so does the sequence
     if settings.get('binder_scaffold'):
         raise NotImplementedError('binder_sequences and binder_scaffold both decide what the binder starts as: seeding a scaffold framework with a sequence that is given is not implemented. Drop one of them, or the scaffold modality that supplies it.')
     #one trajectory per sequence that was given, so every one is folded and designed from exactly once
@@ -486,7 +483,6 @@ def reject_unrecognized_settings(overrides: dict) -> None:
         raise ValueError('unrecognized campaign settings: ' + ', '.join(rejected))
 
 def load_settings(overrides: dict | None=None) -> dict:
-    written = copy.deepcopy(overrides or {})
     overrides = campaign_over_presets(copy.deepcopy(overrides or {}))
     reject_unrecognized_settings(overrides)
     reject_percentage_thresholds(overrides)
@@ -514,7 +510,7 @@ def load_settings(overrides: dict | None=None) -> dict:
         for name, value in {'save_failed_refolds': False, 'save_failed_trajectories': False, 'save_binder_monomers': False, 'save_design_animations': False, 'save_design_frames': False, 'save_design_sequences': False, 'save_design_trajectory': False, 'save_loss_plots': False}.items():
             if name not in overrides:
                 settings[name] = value
-    configure_campaign_features(settings, ConfigurationRequest(overrides, loss_settings, written))
+    configure_campaign_features(settings, ConfigurationRequest(overrides, loss_settings))
     for setting_name, filter_name in FINAL_CONFIDENCE_FILTERS.items():
         if setting_name in overrides and isinstance(settings['filters'], dict) and (filter_name not in overrides.get('filters', {})):
             settings['filters'][filter_name]['threshold'] = float(overrides[setting_name])
