@@ -193,7 +193,7 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
         metrics = scored_trajectory_metrics(design_settings, protein_states, predictions) if failed_stage is None else {}
         if settings.get('save_design_trajectory') and predictions:
             write_trajectory_design(design_settings, protein_states, predictions, trajectory_directory, receptor_chains)
-        append_campaign_metrics(trajectories_csv, target_ordered_row({'design': name, 'trajectory': trajectory_number, 'length': drawn['binder_length'], 'hash': identity, 'terminated': failed_stage or '', 'autotuned': autotuned, **drawn_weight_stamp(drawn), **metrics, 'Timing': timing_stamp(worker=os.environ.get('BINDCRAFT_WORKER_ID', '0'), start=design_started, design=time.time() - design_started, compiled=int(compiled_fresh)), **(metadata or {})}, target_order))
+        append_campaign_metrics(trajectories_csv, target_ordered_row({'design': name, 'trajectory': trajectory_number, 'length': drawn['binder_length'], **({'binder_parent': drawn['binder_parent']} if 'binder_parent' in drawn else {}), 'hash': identity, 'terminated': failed_stage or '', 'autotuned': autotuned, **drawn_weight_stamp(drawn), **metrics, 'Timing': timing_stamp(worker=os.environ.get('BINDCRAFT_WORKER_ID', '0'), start=design_started, design=time.time() - design_started, compiled=int(compiled_fresh)), **(metadata or {})}, target_order))
         campaign_progress.record_trajectory_outcome(failed_stage)
         accepted_from_trajectory = 0
         if failed_stage is None and mpnn_model is not None:
