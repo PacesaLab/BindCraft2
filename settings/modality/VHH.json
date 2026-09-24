@@ -11,10 +11,5 @@
   "design_models": 3,
   "validation_model": "multimer",
   "min_scaffold_sequence_retained_final": 1.0,
-  "aa_bias": {
-    "F": 0.7,
-    "W": 0.3,
-    "Y": 0.9
-  },
   "min_monomer_plddt_final": 0.7
 }

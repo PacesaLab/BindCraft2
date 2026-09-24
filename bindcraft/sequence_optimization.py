@@ -39,8 +39,14 @@ def straight_through_one_hot(probabilities: Array) -> Array:
     one_hot_sequence = jax.nn.one_hot(jnp.argmax(probabilities, axis=-1), probabilities.shape[-1])
     return jax.lax.stop_gradient(one_hot_sequence - probabilities) + probabilities
 
-def sequence_features_from_logits(logits: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array) -> Array:
-    sequence_probabilities = jax.nn.softmax(logits * logit_scale / temperature)
+def sequence_features_from_logits(logits: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array, amino_acid_bias: Array | None=None) -> Array:
+    #a composition bias belongs to the distribution the stage samples, not to the features AlphaFold reads: below
+    #softmax_weight the linear path hands its logits to target_feat verbatim, where a one-hot is expected and an
+    #offset of a few tenths is hundreds of times the 0.01 the logits start at, so the bias rides the softmax alone.
+    #it is added after the scaling rather than before it, so one propensity is one log-odds shift at every stage:
+    #inside, logit_scale 2.0 would square it and the anneal temperature would raise it to the hundredth power.
+    scaled_logits = logits * logit_scale / temperature
+    sequence_probabilities = jax.nn.softmax(scaled_logits if amino_acid_bias is None else scaled_logits + amino_acid_bias)
     blended_logits = jnp.where(omitted_amino_acid_mask(logits), 0.0, logits)
     sequence_features = softmax_weight * sequence_probabilities + (1 - softmax_weight) * blended_logits
     return one_hot_weight * straight_through_one_hot(sequence_probabilities) + (1 - one_hot_weight) * sequence_features

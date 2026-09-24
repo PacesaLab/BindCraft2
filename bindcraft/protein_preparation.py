@@ -142,13 +142,14 @@ def prepare_binder_chains(design_settings: BinderDesignSettings, key: Array) -> 
             raise ValueError('Binder length must be positive')
         binder = {chain_name: Protein.empty(binder_length, binder_random_key) for chain_name in design_settings.binder_chains}
     for chain_name, protein in binder.items():
-        biased_sequence = protein.sequence
-        for amino_acid, bias in design_settings.binder.amino_acid_bias.items():
-            biased_sequence = biased_sequence.at[:, AMINO_ACIDS.index(amino_acid)].add(bias)
+        #an omitted residue is written into the logits because omitted_amino_acid_mask reads them back out of it;
+        #aa_bias is not, it is a standing prior the design model applies every round rather than a head start the
+        #first rounds spend, so one propensity means one thing however many rounds follow it
+        omitted_sequence = protein.sequence
         for amino_acid in design_settings.binder.omitted_amino_acids:
-            biased_sequence = biased_sequence.at[:, AMINO_ACIDS.index(amino_acid)].set(OMITTED_AMINO_ACID_LOGIT)
+            omitted_sequence = omitted_sequence.at[:, AMINO_ACIDS.index(amino_acid)].set(OMITTED_AMINO_ACID_LOGIT)
         #designed residues only, to hold a fold conditioning scaffold's framework
-        sequence = jnp.where(has_residue_flag(protein.flags, ResidueFlags.DESIGN)[:, None], biased_sequence, protein.sequence)
+        sequence = jnp.where(has_residue_flag(protein.flags, ResidueFlags.DESIGN)[:, None], omitted_sequence, protein.sequence)
         binder[chain_name] = protein.replace(sequence=sequence, flags=protein.flags | int(ResidueFlags.CYCLIC) if design_settings.settings.get('cyclize_peptide') else protein.flags)
     return binder
 

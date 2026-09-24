@@ -19,11 +19,5 @@
     }
   },
   "project_folder": "results/pdl1_vhh",
-  "aa_bias": {
-    "C": 0,
-    "F": 0.8,
-    "W": 0.3,
-    "Y": 0.9
-  },
   "max_off_paratope_contact_final": 0.0
 }
