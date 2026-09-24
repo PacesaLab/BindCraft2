@@ -32,7 +32,9 @@ def proteinmpnn_input_features(atoms: Array, resolved_residue_mask: Array, resid
     decoding_priorities = jax.random.uniform(key, resolved_residue_mask.shape)
     decoding_priorities = jnp.where(resolved_residue_mask.astype(bool), decoding_priorities, decoding_priorities + 1)
     decoding_priorities = jnp.where(fixed_residue_mask, decoding_priorities - 1, decoding_priorities)
-    redesigned_sequence_bias = 0.0 if redesigned_amino_acid_bias is None else sequence_to_mpnn_alphabet(redesigned_amino_acid_bias)
+    #the sampler divides the summed logits by temperature, so an unscaled bias arrives as log(w)/temperature and a
+    #propensity of 0.3 lands as 0.3**10; scaling by the temperature here leaves exactly the log-odds shift asked for
+    redesigned_sequence_bias = 0.0 if redesigned_amino_acid_bias is None else sequence_to_mpnn_alphabet(redesigned_amino_acid_bias) * temperature
     sequence_bias = jnp.where(fixed_residue_mask[:, None], 10000000.0 * sequence_to_mpnn_alphabet(sequence), redesigned_sequence_bias)
     features = {'X': atoms[:, _BACKBONE_ATOMS, :].astype(jnp.float32), 'mask': resolved_residue_mask, 'residue_idx': residue_index, 'chain_idx': chain_indices, 'bias': sequence_bias, 'temperature': temperature}
     if tied_residue_groups is None:

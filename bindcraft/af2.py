@@ -13,7 +13,7 @@ from bindcraft.af import accel
 from bindcraft.prediction import DifferentiableProteinPredictor, CompiledModelCache, residue_chain_ids, concatenate_chain_arrays, collect_shared_chains, split_residue_arrays_by_chain
 from bindcraft.loss import DesignLoss, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
 from bindcraft.sequence_optimization import sequence_features_from_logits
-from bindcraft.protein import ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
+from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
 
 @contextmanager
 def one_worker_compiles(compile_shape: tuple):
@@ -37,11 +37,11 @@ def align_prediction_to_target_template(predicted_atom_positions: Array, predict
     aligned_atom_positions = (predicted_atom_positions.astype(jnp.float32) - prediction_center) @ alignment_rotation.T + template_center
     return jnp.where(predicted_atom_mask[:, :, None], aligned_atom_positions, 0.0).astype(predicted_atom_positions.dtype)
 
-def prepare_design_sequence_features(sequence: Array, flags: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array) -> tuple[Array, Array]:
+def prepare_design_sequence_features(sequence: Array, flags: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array, amino_acid_bias: Array | None=None) -> tuple[Array, Array]:
     designed_residue_mask = has_residue_flag(flags, ResidueFlags.DESIGN)[:, None]
-    sequence_features = jnp.where(designed_residue_mask, sequence_features_from_logits(sequence, softmax_weight, one_hot_weight, temperature, logit_scale), sequence)
+    sequence_features = jnp.where(designed_residue_mask, sequence_features_from_logits(sequence, softmax_weight, one_hot_weight, temperature, logit_scale, amino_acid_bias), sequence)
     one_hot_weight_value = jnp.ones((), dtype=jnp.result_type(softmax_weight))
-    sequence_profile = jnp.where(designed_residue_mask, sequence_features_from_logits(sequence, softmax_weight, one_hot_weight_value, temperature, logit_scale), sequence)
+    sequence_profile = jnp.where(designed_residue_mask, sequence_features_from_logits(sequence, softmax_weight, one_hot_weight_value, temperature, logit_scale, amino_acid_bias), sequence)
     return sequence_features, sequence_profile
 
 DEFAULT_LENGTH_BUCKET = 32
@@ -206,7 +206,7 @@ def resolve_subbatch_size(residue_count: int, subbatch_size: int | None | str='a
     return LARGE_COMPLEX_SUBBATCH_SIZE if residue_count > SUBBATCH_RESIDUE_THRESHOLD else None
 
 class AlphaFoldDesignModel(DifferentiableProteinPredictor):
-    def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, bigbang_initialization: bool=False):
+    def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, bigbang_initialization: bool=False, amino_acid_bias: dict[str, float] | None=None):
         self.cyclic_offset_mode = cyclic_offset_mode
         self.target_pad_length = target_pad_length
         self.multi_chain_binders = multi_chain_binders
@@ -218,6 +218,8 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         self.num_recycle = num_recycle
         self.target_flexibility = target_flexibility
         self.bigbang_initialization = bigbang_initialization
+        #one row of log-odds read off the settings, not an array carried beside every chain
+        self.amino_acid_bias = None if not amino_acid_bias else jnp.asarray([amino_acid_bias.get(amino_acid, 0.0) for amino_acid in AMINO_ACIDS], dtype=jnp.float32)
         self.subbatch_size = subbatch_size
         self.length_bucket_size = length_bucket_size
         self.attention_backend = accel.supported_attention_backend(attention_backend)
@@ -275,7 +277,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         if compiled_prediction is None:
             alphafold_runner = self._alphafold_runner(model_family, subbatch_size)
             def predict_complex_arrays(model_parameters: Array, key: Array, sequence: Array, atoms: Array, atom_mask: Array, residue_index: Array, asym_id: Array, entity_id: Array, interface_asym_id: Array, seq_mask: Array, flags: Array, dropout: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array):
-                sequence_features, sequence_profile = prepare_design_sequence_features(sequence, flags, softmax_weight, one_hot_weight, temperature, logit_scale)
+                sequence_features, sequence_profile = prepare_design_sequence_features(sequence, flags, softmax_weight, one_hot_weight, temperature, logit_scale, self.amino_acid_bias)
                 model_inputs = alphafold_input_features(sequence_features, sequence_profile, atoms, atom_mask, residue_index, asym_id, seq_mask, flags, dropout, self.cyclic_offset_mode, entity_id, self.target_flexibility, self.bigbang_initialization)
                 alphafold_outputs = recycled_alphafold_outputs(alphafold_runner, model_parameters, key, model_inputs, self.num_recycle)
                 predicted_atom_positions = alphafold_outputs['structure_module']['final_atom_positions'].astype(jnp.float16)
@@ -337,7 +339,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 asym_id = residue_chain_ids(chain_lengths)
                 entity_id = residue_entity_ids(chain_names, chain_lengths, self.multi_chain_binders)
                 seq_mask = real_residue_weights(flags)
-                sequence_features, sequence_profile = prepare_design_sequence_features(sequence, flags, softmax_weight, one_hot_weight, temperature, logit_scale)
+                sequence_features, sequence_profile = prepare_design_sequence_features(sequence, flags, softmax_weight, one_hot_weight, temperature, logit_scale, self.amino_acid_bias)
                 model_inputs = alphafold_input_features(sequence_features, sequence_profile, atoms, atom_mask, residue_index, asym_id, seq_mask, flags, dropout, self.cyclic_offset_mode, entity_id, self.target_flexibility, self.bigbang_initialization)
                 alphafold_outputs = recycled_alphafold_outputs(alphafold_runner, model_parameters, key, model_inputs, self.num_recycle)
                 predicted_atom_positions = alphafold_outputs['structure_module']['final_atom_positions'].astype(jnp.float16)
