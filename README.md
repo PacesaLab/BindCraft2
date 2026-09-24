@@ -153,7 +153,7 @@ Add a compatible property as a command-line flag or a top-level JSON entry:
 | Property | Command-line flag | JSON entry |
 | --- | --- | --- |
 | **Focused epitope** — concentrate binding on named hotspots | `--forced-targeting` | `"forced_targeting": true` |
-| **Humanization** — favour human-like sequence features | `--humanize` | `"humanize": true` |
+| **Humanization** — favour human-like, lower immunogenicity, sequence features (*in development*) | `--humanize` | `"humanize": true` |
 | **Protease resistance** — reduce predicted cleavage susceptibility | `--protease-stable` | `"protease_stable": true` |
 | **Disulfide staple** — include a predicted disulfide bond | `--disulfide-staple` | `"disulfide_staple": true` |
 | **Mixed topology** — select for beta-sheet content and limit helicity | `--mixed-topology` | `"mixed_topology": true` |
@@ -243,5 +243,5 @@ BC2 builds on a great deal of prior work, and we are grateful to the people and 
 - **[AlphaFold 2](https://github.com/google-deepmind/alphafold)** (DeepMind) — BC2 uses AlphaFold 2 code and models for both sequence optimisation and validation.
 - **[ColabDesign](https://github.com/sokrypton/ColabDesign)** (Sergey Ovchinnikov) — the design engine is based on ColabDesign's hallucination and design framework.
 - **[ProteinMPNN](https://github.com/dauparas/ProteinMPNN)** (Justas Dauparas) — used for sequence redesign.
-- **HyperMPNN** — the "positive" design weights are taken from the MeilerLab GitHub repository.
+- **[HyperMPNN](https://github.com/meilerlab/HyperMPNN)** — the "positive" design weights are taken from the MeilerLab GitHub repository.
 - Special thanks to **Lennart Nickel** (Correia group).

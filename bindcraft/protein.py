@@ -187,7 +187,7 @@ class Protein:
 
     @staticmethod
     def unresolved_atom_arrays(length: int) -> tuple[Array, Array, Array]:
-        return jnp.zeros((length, len(ATOM_NAMES), 3), dtype=jnp.float16), jnp.zeros((length, len(ATOM_NAMES)), dtype=bool), jnp.arange(length, dtype=jnp.int32)
+        return jnp.zeros((length, len(ATOM_NAMES), 3), dtype=jnp.float16), jnp.zeros((length, len(ATOM_NAMES)), dtype=bool), jnp.arange(1, length+1, dtype=jnp.int32)
 
     @staticmethod
     def empty(length: int, key: Array) -> 'Protein':
