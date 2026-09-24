@@ -6,5 +6,11 @@
   "validation_model": "multimer",
   "min_scaffold_sequence_retained_final": 1.0,
   "max_scaffold_framework_rmsd_final": 3.0,
-  "min_monomer_plddt_final": 0.7
+  "min_monomer_plddt_final": 0.7,
+  "aa_bias": {
+    "C": 0.0,
+    "F": 0.9,
+    "W": 0.3,
+    "Y": 0.9
+  }
 }
