@@ -1,0 +1,11 @@
+{
+  "campaign_name": "my_pdl1_binders",
+  "project_folder": "results/pdl1",
+  "modality": "binder",
+  "targets": [
+    { "name": "PDL1", "target_path": "PDL1.pdb", "chains": "A", "hotspots": "A54,A56,A66,A115" }
+  ],
+  "binder_lengths": [60, 100],
+  "number_of_final_designs": 10,
+  "max_trajectories": 2000
+}

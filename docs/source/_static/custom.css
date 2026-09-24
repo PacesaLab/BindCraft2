@@ -1,0 +1,8 @@
+/* Make admonition (note, warning, tip, etc.) text the same size as normal body text.
+   Furo defaults these to 0.8125rem via a `body { ... }` rule, so the override
+   must also target `body` (not `:root`, which only matches <html> and is
+   shadowed by Furo's own body-level declaration). */
+body {
+  --admonition-font-size: var(--font-size--normal);
+  --admonition-title-font-size: var(--font-size--normal);
+}

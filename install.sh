@@ -13,7 +13,7 @@ fetch_weights=1
 for argument in "$@"; do
   case "$argument" in
     --no-weights) fetch_weights=0 ;;
-    cuda13|cuda12|rocm|oneapi) accelerator="$argument" ;;
+    cuda13|cuda12|rocm) accelerator="$argument" ;;
     cpu) echo "bindcraft: there is no CPU installation. A trajectory folds an AlphaFold ensemble hundreds of times, which is days of processor for an hour of card, so install where there is a GPU." >&2; exit 2 ;;
     *) echo "usage: bash install.sh [cuda13|cuda12|rocm|oneapi] [--no-weights]" >&2; exit 2 ;;
   esac

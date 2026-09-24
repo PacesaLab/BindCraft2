@@ -13,7 +13,7 @@ GETTING_STARTED = """BindCraft designs a binder from one settings file:
     python bindcraft.py examples/pdl1_denovo.json number_of_final_designs=1 'binder_lengths=[70,90]'
 
 Any setting of the file is overridden by naming it that way, and examples/README.md lists the
-campaigns that ship with the repository. Settings, losses and filters are in docs/reference.md.
+campaigns that ship with the repository. Settings, losses and filters are in docs/source/reference.md.
 Every other bindcraft command is reached the same way: rank, score, archive, fetch-weights.
 """
 

@@ -1,6 +1,6 @@
 # Example campaigns
 
-[Back to the README](../README.md) · [Modality settings](../README.md#design-modalities) · [Compatibility chart](../README.md#combining-modalities) · [Full reference](../docs/reference.md)
+[Back to the README](../README.md) · [Modality settings](../README.md#design-modalities) · [Compatibility chart](../README.md#combining-modalities) · [Full reference](../docs/source/reference.md)
 
 Start with [pdl1.json](pdl1.json) to use named presets. It names the shipped [hPDL1 target](../settings/target/hPDL1.json) and the `binder` modality, and requests 10 accepted designs and sets an output folder. BC2 supplies the detailed design settings and filters.
 
@@ -30,16 +30,18 @@ bindcraft design examples/my_target.json
 
 A named target ships its own structure under [settings/target/](../settings/target/). Target and custom scaffold paths you write yourself are read from the JSON file’s directory. Running the quickstart from the repository root writes to `results/pdl1/`, as set by `project_folder`. Named scaffold presets resolve their own files under `scaffolds/`. `number_of_final_designs` counts accepted designs. The quickstart has no attempt limit; set `max_trajectories` only if you want one. `metadata.json` is a separate optional input for author or project fields, supplied with `--metadata`.
 
-The other examples below demonstrate explicit settings for particular experiments. **Their explicit values override any presets you add**, including lengths, amino-acid preferences and filters. Use the small file when switching formats through `--modality`; consult a detailed example when you want to customise that experiment. See [input tiers and precedence](../docs/reference.md#input-tiers-and-overrides).
+The other examples below demonstrate explicit settings for particular experiments. **Their explicit values override any presets you add**, including lengths, amino-acid preferences and filters. Use the small file when switching formats through `--modality`; consult a detailed example when you want to customise that experiment. See [input tiers and precedence](../docs/source/reference.md#input-tiers-and-overrides).
 
 ## Choose an example
 
 | File | Modality | What it requests |
 | --- | --- | --- |
 | [pdl1.json](pdl1.json) | Preset-based quickstart | The `hPDL1` target plus the `binder` preset; use this file with modality and property flags. |
+| [pdl1_custom_target.json](pdl1_custom_target.json) | Custom target | A target defined by your own PDB file and hotspots, in place of a shipped named preset; the minimal layout for writing your own target. |
 | [pdl1_denovo.json](pdl1_denovo.json) | De novo miniprotein | One structured target; 60–100 residue binders. |
 | [pdl1_ortholog_pair.json](pdl1_ortholog_pair.json) | Multitargeting | One sequence against the `hPDL1` and `mPDL1` targets, each with its own hotspots. |
 | [pdl1_detarget_pd1.json](pdl1_detarget_pd1.json) | Detargeting | The `hPDL1` target with the `hPD1` off-target; explicit detarget confidence ceilings. |
+| [pdl1_crossreactive_detarget.json](pdl1_crossreactive_detarget.json) | Cross-reactive multitargeting with detargeting | The `hPDL1` and `mPDL1` targets weighted equally for cross-reactivity, plus the `hPD1` off-target given a negative weight to detarget it. |
 | [il7ra_focused_epitope.json](il7ra_focused_epitope.json) | Forced targeting and coldspots | Drive contact onto a named ten-residue IL-7Rα patch and require the accepted design to touch it; the rest of the exposed face is kept free by the target's own coldspots. |
 | [dynorphin_idr.json](dynorphin_idr.json) | Disordered target | Dynorphin A(1–13) from FASTA; a fixed 13-residue target window. |
 | [il2_receptor.json](il2_receptor.json) | Multi-chain receptor | The IL-2 receptor beta/gamma assembly; require contacts to both chains. |
