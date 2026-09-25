@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import jax
 from pathlib import Path
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
@@ -21,58 +22,23 @@ TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
 
-#Each accelerator family is pinned by the variable its own runtime reads, which is what lets a
-#worker be given one device. JAX's own jax_cuda_visible_devices/jax_rocm_visible_devices are absl
-#flags rather than environment states, so they do not cross into a worker process and cannot be
-#used here.
-DEVICE_VISIBILITY_VARIABLES = {'cuda': 'CUDA_VISIBLE_DEVICES', 'rocm': 'HIP_VISIBLE_DEVICES'}
-DEVICE_VISIBILITY_ORDER = tuple(dict.fromkeys(DEVICE_VISIBILITY_VARIABLES.values()))
-
 def design_devices() -> list:
-    """The accelerators JAX holds, in JAX's order, with the host CPU left out."""
-    try:
-        import jax
-        return [device for device in jax.devices() if device.platform != 'cpu']
-    except (ImportError, RuntimeError):
-        return []
-
-def installed_accelerator_platforms() -> set[str]:
-    from bindcraft.selfcheck import ACCELERATOR_MODULES, module_present
-    return {name.rstrip('0123456789') for name, modules in ACCELERATOR_MODULES.items() if module_present(modules[0])}
-
-def design_device_platform() -> str:
-    """Which accelerator family is designing, resolving JAX's shared 'gpu' name by installed plugin."""
-    devices = design_devices()
-    if not devices:
-        return ''
-    if devices[0].platform in DEVICE_VISIBILITY_VARIABLES:
-        return devices[0].platform
-    candidates = installed_accelerator_platforms() & set(DEVICE_VISIBILITY_VARIABLES)
-    return candidates.pop() if len(candidates) == 1 else ''
+    return [device for device in jax.devices() if device.platform != 'cpu']
 
 def design_visibility_variable() -> str | None:
-    """The variable a worker is pinned with, or None when this platform has no way to pin one."""
-    for variable in DEVICE_VISIBILITY_ORDER:
-        if os.environ.get(variable):
-            return variable
-    return DEVICE_VISIBILITY_VARIABLES.get(design_device_platform())
-
-def nvidia_smi_gpu_indices() -> list[str]:
-    try:
-        listing = subprocess.run(['nvidia-smi', '--query-gpu=index', '--format=csv,noheader'], capture_output=True, text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return []
-    return [line.strip() for line in listing.splitlines() if line.strip()]
-
-def visible_design_gpus() -> list[str]:
-    for variable in DEVICE_VISIBILITY_ORDER:
-        visible = os.environ.get(variable)
-        if visible is not None:
-            return [device.strip() for device in visible.split(',') if device.strip()]
-    return nvidia_smi_gpu_indices() or [str(device.id) for device in design_devices()]
+    devices = design_devices()
+    if not devices:
+        raise ValueError(f'Jax installation could not detect any device')
+    device_kind = str(devices[0]).split(':')[0] # 'cuda:0' 'rocm:0'
+    if device_kind == 'cuda':
+        return 'CUDA_VISIBLE_DEVICES'
+    elif device_kind == 'rocm':
+        return 'HIP_VISIBLE_DEVICES'
+    else:
+        raise ValueError(f'Device of kind {device_kind} is currently not supported')
 
 def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
-    gpus = visible_design_gpus()
+    gpus = [str(device.id) for device in design_devices()]
     if gpu_ids in (None, '', 'all'):
         return gpus
     requested = [str(device).strip() for device in (gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids) if str(device).strip()]
