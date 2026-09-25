@@ -2,6 +2,7 @@ import os
 import threading
 import time
 import jax
+from bindcraft import append_xla_flags
 from bindcraft.af2 import AlphaFoldDesignModel, MONOMER_POOL, MULTIMER_POOL, campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import trajectory_output_path, CampaignProgress, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, TRAJECTORY_STAGE, accepted_state_suffixes, append_accepted_design, append_campaign_metrics, archive_trajectory_folder, designed_span_stamp, discard_trajectory_structures, drawn_weight_stamp, model_score_stamp, rank_accepted_designs, reprediction_facts, structure_metadata, stage_folder, stage_table, target_ordered_row, timing_stamp, weighted_target_order, write_campaign_metadata, write_campaign_summary
 from bindcraft.campaign_log import binder_optimization, campaign_budget_exhausted, campaign_closed, campaign_header, campaign_label, design_worker_index, speaks_for_the_campaign, trajectory_already_designed, trajectory_design_label, trajectory_header
@@ -284,6 +285,9 @@ def launch_campaign(settings_path: str, setting_overrides: list[str] | tuple[str
     settings = cleaned_campaign_settings(read_settings(settings_path, parse_setting_overrides(setting_overrides)))
     metadata = {**settings_provenance(settings, tuple(setting_overrides)), **(read_campaign_metadata(metadata_path) or {})}
     project_folder = settings.get('project_folder', DEFAULT_PROJECT_FOLDER)
+    if settings.get('reproducible_gradients', False):
+        print("""WARNING: reproducible gradients slows long runs by 20%""")
+        append_xla_flags('--xla_gpu_autotune_level=0')
     if af2_weights is None or mpnn_weights is None:
         resolved_af2_weights, resolved_mpnn_weights = model_weights()
         af2_weights = resolved_af2_weights if af2_weights is None else af2_weights

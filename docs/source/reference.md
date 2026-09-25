@@ -116,7 +116,8 @@ Stage checks run after `screen`, `refine`, `anneal`, `harden`, `mutate` and `fin
 | --- | --- | --- |
 | `number_of_final_designs` | 1; quickstart 10 | How many accepted sequences you want. |
 | `max_trajectories` | Unset | Optional attempt limit. Leave unset to keep working toward the requested count. |
-| `campaign_seed` | 0 | Choose a new set of random trajectories or reproduce the same draws. |
+| `campaign_seed` | 0 | Choose a new set of random trajectories or reproduce the same random setting draws. |
+| `reproducible_gradients` | False | Set to True to make trajectories fully reproducible on same machine, slows long runs by 20%. |
 | `resume` | true | Continue the same experiment in its existing folder; `false` refuses a non-empty folder instead. |
 | `trajectory_only` | false | Explore gradient designs without ProteinMPNN acceptance; specify an attempt limit. |
 | `min_plddt_<stage>` | 0.6 screen/refine/mutate; 0.65 anneal/harden; 0.7 final | Require binder confidence at each stage. |
@@ -422,7 +423,7 @@ The autotuner reviews blocks of ten trajectories and moves two things only: the 
 
 The initial guess and the flexibility are tried alone before they are tried together, so a rung that works says which change bought the design. Rungs 4 to 6 move validation off the held-back monomer models onto held-out multimer models, splitting the multimer pool 3 to design and 2 to validate, for a target whose interface the monomer models cannot resolve. More recycles come last because they cost only time; a campaign that already asks for more than three keeps its own count. The rung is read off the campaign's own tables, so every worker and a resumed campaign stand on the same one, and a `trajectory_only` campaign never climbs at all.
 
-**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the initial guess reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
+**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the initial guess reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed` and `reproducible_gradients`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
 
 ```json
 {
