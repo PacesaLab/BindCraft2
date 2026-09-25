@@ -63,10 +63,7 @@ the framework carries no IP: the germline is retained and only the CDRs are desi
 
 > **Naming and IP.** BC2 deliberately builds on non-proprietary frameworks: the antibody scaffolds use
 > human germline sequences (IGHV3-23, IGKV1-39, IGHJ4, with the VHH on the human-germline GLEW
-> framework), and the ARP is a long-established full-consensus ankyrin-repeat fold. The names
-> "DARPin®" and "Nanobody®" are registered trademarks, which is why BC2 uses **ARP** and **VHH**
-> instead. This is not a freedom-to-operate opinion — confirm FTO on your designed sequences, the
-> chosen format and any downstream construct with your own counsel before development. Supply your own
+> framework), and the ARP is a long-established full-consensus ankyrin-repeat fold. Supply your own
 > scaffold if you need a specific framework; a custom antibody CIF must be **sequentially renumbered**
 > (the engine rejects Kabat insertion codes).
 
