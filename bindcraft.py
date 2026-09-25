@@ -60,8 +60,8 @@ def designs_a_campaign(arguments: list[str]) -> bool:
     return named == 'design' or (bool(named) and named not in COMMANDS and named not in COMMAND_MODULES and named not in package_modules() and (not named.startswith('-')))
 
 def design_gpu_note() -> str:
-    from bindcraft.design_workers import visible_design_gpus
-    gpus = visible_design_gpus()
+    from bindcraft.design_workers import selected_design_gpus
+    gpus = selected_design_gpus()
     if len(gpus) > 1:
         return f'{len(gpus)} GPUs visible, designing on all of them at once'
     if gpus:

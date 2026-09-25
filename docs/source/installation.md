@@ -153,7 +153,7 @@ A campaign uses **every GPU it can see, without being asked**, and packs several
 
 ### How a campaign fills a card
 
-Visible cards are read from `CUDA_VISIBLE_DEVICES` or `HIP_VISIBLE_DEVICES`, then from `nvidia-smi`, and from `jax.devices()` when none of those answer. Each worker is pinned with the variable its own runtime reads, so a ROCm machine fills every card the way a CUDA one does. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
+Visible cards are read from `jax.devices()`, which follows `CUDA_VISIBLE_DEVICES` and `HIP_VISIBLE_DEVICES`. Each worker runs as its own subprocess and is given one card by setting that variable for it. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
 
 If `trajectory_only` is set in a campaign, or a card whose memory cannot be read, BindCraft2 runs **one worker per card**.
 
