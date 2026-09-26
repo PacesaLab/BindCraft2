@@ -217,9 +217,9 @@ design for specificity; read the `_detarget` metrics as *avoidance*, not binding
 <details>
 <summary>Reproducibility.</summary>
 
-`campaign_seed` fixes the draws within one setup but does not guarantee identical numbers across
-machines/GPUs. A campaign **resumes by default** — rerun the same command against the same folder
-to continue it.
+`campaign_seed` fixes the randomness in a campaign setup but does not guarantee identical trajectories across
+machines/GPUs.
+To get reproducible trajectories on the same machine set `reproducible_gradients=True`, this will make long runs up to 20% slower. 
 </details>
 
 ---
