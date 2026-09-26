@@ -153,7 +153,7 @@ A campaign uses **every GPU it can see, without being asked**, and packs several
 
 ### How a campaign fills a card
 
-Visible cards are read from `CUDA_VISIBLE_DEVICES`, and from `nvidia-smi` when that is unset. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
+Visible cards are read from `jax.devices()`, which follows `CUDA_VISIBLE_DEVICES` and `HIP_VISIBLE_DEVICES`. Each worker runs as its own subprocess and is given one card by setting that variable for it. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
 
 If `trajectory_only` is set in a campaign, or a card whose memory cannot be read, BindCraft2 runs **one worker per card**.
 
@@ -263,10 +263,10 @@ srun --environment=/path/to/bindcraft.toml bindcraft design settings.json
 
 Two things have to line up, and JAX says neither out loud: it warns once and then runs on the CPU.
 
-1. The allocation has to ask for the cards, with `--gpus all`, `--gpus-per-node=N` or `--gres=gpu:N`. A campaign reads `CUDA_VISIBLE_DEVICES` to find them and the image carries no `nvidia-smi` to fall back on.
+1. The allocation has to ask for the cards, with `--gpus all`, `--gpus-per-node=N` or `--gres=gpu:N`. Without one Slurm sets `CUDA_VISIBLE_DEVICES` empty, and an empty variable means no card, whatever the node holds. The image carries no `nvidia-smi`, so where the variable is unset entirely the cards are found through `jax.devices()`.
 2. `NVIDIA_VISIBLE_DEVICES` and `NVIDIA_DRIVER_CAPABILITIES` have to be set. The container hook injects the host driver only into an image that asks for it by name. The image declares both, but an environment definition that replaces the environment must carry them too, which is why `containers/bindcraft.toml` repeats them.
 
-Check before spending a night on a campaign. The fan-out line a campaign prints is read off `CUDA_VISIBLE_DEVICES`, not off the devices JAX opened, so it names every card either way:
+Check before spending a night on a campaign. Where the allocation sets a visibility variable, the fan-out line a campaign prints is read off that variable rather than off the devices JAX opened, so it names every card either way:
 
 ```bash
 srun --environment=/path/to/bindcraft.toml python3 -c "import jax; print(jax.devices())"

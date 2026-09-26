@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import jax
 from pathlib import Path
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
@@ -21,18 +22,33 @@ TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
 
-def visible_design_gpus() -> list[str]:
-    visible = os.environ.get('CUDA_VISIBLE_DEVICES')
-    if visible is not None:
-        return [device.strip() for device in visible.split(',') if device.strip()]
-    try:
-        listing = subprocess.run(['nvidia-smi', '--query-gpu=index', '--format=csv,noheader'], capture_output=True, text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return []
-    return [line.strip() for line in listing.splitlines() if line.strip()]
+def design_devices() -> list:
+    return [device for device in jax.devices() if device.platform != 'cpu']
+
+def design_visibility_variable() -> str | None:
+    devices = design_devices()
+    if not devices:
+        raise ValueError(f'Jax installation could not detect any device')
+    device_kind = str(devices[0]).split(':')[0] # 'cuda:0' 'rocm:0'
+    if device_kind == 'cuda':
+        return 'CUDA_VISIBLE_DEVICES'
+    elif device_kind == 'rocm':
+        return 'HIP_VISIBLE_DEVICES'
+    else:
+        return None  #no way to pin a worker on this platform, which plan_design_workers designs on one for
+
+def design_device_names() -> list[str]:
+    """The identifier each worker is pinned by: the visibility variable's own entries when they
+    describe these devices, jax ids otherwise. jax numbers the devices a process can see from 0,
+    so under CUDA_VISIBLE_DEVICES=2,3 the ids are 0 and 1 and pinning a worker by id would move it
+    onto the two cards the job was not given."""
+    devices = design_devices()
+    variable = design_visibility_variable() if devices else None
+    visible = [name.strip() for name in os.environ.get(variable, '').split(',') if name.strip()] if variable else []
+    return visible if len(visible) == len(devices) else [str(device.id) for device in devices]
 
 def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
-    gpus = visible_design_gpus()
+    gpus = design_device_names()
     if gpu_ids in (None, '', 'all'):
         return gpus
     requested = [str(device).strip() for device in (gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids) if str(device).strip()]
@@ -41,13 +57,35 @@ def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
         raise ValueError(f'requested GPUs {missing} are not visible to this process')
     return requested
 
-def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
+def mebibytes_gb(reading: str) -> float | None:
+    """nvidia-smi prints [N/A] instead of a number, and still exits 0, for a board whose memory it
+    cannot measure - a unified-memory one (DGX Spark GB10) among them."""
+    try:
+        return float(reading) / 1024
+    except ValueError:
+        return None
+
+def nvidia_smi_memory_gb() -> dict[str, tuple[float, float]]:
     try:
         listing = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return {}
     fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    return {index: (float(free_mib) / 1024, float(total_mib) / 1024) for index, free_mib, total_mib in fields}
+    readings = ((index, mebibytes_gb(free_mib), mebibytes_gb(total_mib)) for index, free_mib, total_mib in fields)
+    return {index: (free_gb, total_gb) for index, free_gb, total_gb in readings if None not in (free_gb, total_gb)}
+
+def jax_device_memory_gb() -> dict[str, tuple[float, float]]:
+    """Free and total device memory as the PJRT plugin reports it, for plugins that report it."""
+    memory = {}
+    for name, device in zip(design_device_names(), design_devices()):
+        statistics = device.memory_stats() or {}
+        total_bytes = statistics.get('bytes_limit') or statistics.get('bytes_reservable_limit') or 0
+        if total_bytes:
+            memory[name] = ((total_bytes - statistics.get('bytes_in_use', 0)) / 1024 ** 3, total_bytes / 1024 ** 3)
+    return memory
+
+def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
+    return nvidia_smi_memory_gb() or jax_device_memory_gb()
 
 def estimate_design_memory_gb(residue_count: int) -> float:
     return DESIGN_MEMORY_SAFETY_FACTOR * (DESIGN_MODEL_RESIDENT_GB + DESIGN_ACTIVATION_BYTES_PER_RESIDUE_PAIR * int(residue_count) ** 2 / 1e9)
@@ -122,6 +160,11 @@ def worker_residue_count(settings: dict, worker: dict, residue_count: int | None
 
 def plan_design_workers(settings: dict, residue_count: int | None=None, trajectory_budget: int | None=None) -> list[dict]:
     gpus = selected_design_gpus(os.environ.get('BINDCRAFT_GPU_IDS', settings.get('gpu_ids')))
+    if len(gpus) > 1 and design_visibility_variable() is None:
+        #Fanning out without a way to pin each worker would land every one of them on the same
+        #device, so this platform designs on one until its visibility variable is known here.
+        print(f'{len(gpus)} devices visible, designing on one: no way to pin a worker to a single device on this platform', flush=True)
+        gpus = gpus[:1]
     gpu_memory = design_gpu_memory_gb()
     worker_limit = int(os.environ.get('BINDCRAFT_DESIGN_WORKERS', settings.get('design_workers') or 0))
     plan = []
@@ -198,6 +241,7 @@ def report_campaign_close(project_folders: tuple[str, ...], requested_designs: i
 def launch_design_workers(plan: list[dict], log_directory: str, worker_command: list[str], launch_stagger_seconds: float=0.0, project_folders: tuple[str, ...]=(), requested_designs: int=0, max_trajectories: int | None=None) -> int:
     os.makedirs(log_directory, exist_ok=True)
     processes, log_files, relays, console = [], [], [], TrajectoryOrderedConsole()
+    visibility_variable = design_visibility_variable() or 'CUDA_VISIBLE_DEVICES'
     workers_on_card, launch_order = {}, []
     for worker_index, worker in enumerate(plan):
         rung = workers_on_card[worker['gpu']] = workers_on_card.get(worker['gpu'], -1) + 1
@@ -208,7 +252,7 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
             if rung != launched_rung and launch_stagger_seconds:
                 time.sleep(launch_stagger_seconds)
             launched_rung = rung
-            environment = {**os.environ, 'CUDA_VISIBLE_DEVICES': worker['gpu'], 'BINDCRAFT_WORKER_ID': str(worker_index), 'BINDCRAFT_WORKER_COUNT': str(len(plan))}
+            environment = {**os.environ, visibility_variable: worker['gpu'], 'BINDCRAFT_WORKER_ID': str(worker_index), 'BINDCRAFT_WORKER_COUNT': str(len(plan))}
             if worker.get('memory_fraction'):
                 environment['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(worker['memory_fraction'])
             if worker.get('lengths'):

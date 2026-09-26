@@ -46,15 +46,16 @@ as well: a parameter directory that is a link into a filesystem the container do
 
 ## Making sure the cards are reached
 
-A campaign fans one design worker out per GPU by itself, but it reads `CUDA_VISIBLE_DEVICES` to find
-them and the image carries no `nvidia-smi` to fall back on, so the allocation has to ask for the
-cards: `--gpus-per-node=N`, or `--gres=gpu:N` wherever that is what the scheduler takes. Without it
-Slurm sets the variable empty and jax finds no device.
+A campaign fans one design worker out per GPU by itself. It reads `CUDA_VISIBLE_DEVICES` first and
+the image carries no `nvidia-smi`, so where the variable is unset the cards are found through
+`jax.devices()`. The allocation still has to ask for them: `--gpus-per-node=N`, or `--gres=gpu:N`
+wherever that is what the scheduler takes. Without it Slurm sets the variable empty, and an empty
+variable means no device however many the node holds.
 
 Check that they are really in use before spending a night on a campaign. jax falls back to the CPU on
 its own and says so only in a warning buried in a plugin traceback, and the fan-out line above it
-still names every GPU, because that line is read off `CUDA_VISIBLE_DEVICES` rather than off the
-devices jax opened:
+still names every GPU, because where the allocation sets that variable the line is read off it
+rather than off the devices jax opened:
 
 ```bash
 srun --environment=/path/to/bindcraft.toml python3 -c "import jax; print(jax.devices())"
