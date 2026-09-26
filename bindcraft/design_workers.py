@@ -35,10 +35,20 @@ def design_visibility_variable() -> str | None:
     elif device_kind == 'rocm':
         return 'HIP_VISIBLE_DEVICES'
     else:
-        raise ValueError(f'Device of kind {device_kind} is currently not supported')
+        return None  #no way to pin a worker on this platform, which plan_design_workers designs on one for
+
+def design_device_names() -> list[str]:
+    """The identifier each worker is pinned by: the visibility variable's own entries when they
+    describe these devices, jax ids otherwise. jax numbers the devices a process can see from 0,
+    so under CUDA_VISIBLE_DEVICES=2,3 the ids are 0 and 1 and pinning a worker by id would move it
+    onto the two cards the job was not given."""
+    devices = design_devices()
+    variable = design_visibility_variable() if devices else None
+    visible = [name.strip() for name in os.environ.get(variable, '').split(',') if name.strip()] if variable else []
+    return visible if len(visible) == len(devices) else [str(device.id) for device in devices]
 
 def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
-    gpus = [str(device.id) for device in design_devices()]
+    gpus = design_device_names()
     if gpu_ids in (None, '', 'all'):
         return gpus
     requested = [str(device).strip() for device in (gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids) if str(device).strip()]
@@ -58,11 +68,11 @@ def nvidia_smi_memory_gb() -> dict[str, tuple[float, float]]:
 def jax_device_memory_gb() -> dict[str, tuple[float, float]]:
     """Free and total device memory as the PJRT plugin reports it, for plugins that report it."""
     memory = {}
-    for device in design_devices():
+    for name, device in zip(design_device_names(), design_devices()):
         statistics = device.memory_stats() or {}
         total_bytes = statistics.get('bytes_limit') or statistics.get('bytes_reservable_limit') or 0
         if total_bytes:
-            memory[str(device.id)] = ((total_bytes - statistics.get('bytes_in_use', 0)) / 1024 ** 3, total_bytes / 1024 ** 3)
+            memory[name] = ((total_bytes - statistics.get('bytes_in_use', 0)) / 1024 ** 3, total_bytes / 1024 ** 3)
     return memory
 
 def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
