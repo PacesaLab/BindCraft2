@@ -1,7 +1,7 @@
 {
   "target": "hPDL1",
   "binder_scaffold": "../scaffolds/scFv.cif",
-  "mutate_positions": "H28,H30-33,H52,H54-59,H100-103(3-8),L26-28,L30-32,L52,L53,L92-94",
+  "mutate_positions": "L30-32,L91-94,L96,H31-33,H50,H52-55(4-6),H57,H59,H99-106(5-18),H72*",
   "number_of_final_designs": 5,
   "max_trajectories": 100,
   "min_scaffold_sequence_retained_final": 1.0,

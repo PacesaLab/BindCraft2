@@ -1,8 +1,8 @@
 {
   "target": "hPDL1",
   "binder_lengths": [
-    7,
-    20
+    6,
+    16
   ],
   "validation_model": "multimer",
   "cyclize_peptide": true,
