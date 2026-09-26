@@ -1,7 +1,7 @@
 {
   "description": "The ankyrin-repeat scaffold with editable repeat positions",
   "binder_scaffold": "scaffolds/ARP.cif",
-  "mutate_positions": "A16,A20,A23,A44-48(5-10),A56,A57,A69,A76,A77-81(5-10),A89,A90,A102,A109,A110-114(5-10),A122,A123,A135,A142,A143-147(5-10),A156",
+  "mutate_positions": "A16,A19,A20,A23,A44-48(5-10),A53,A56,A77-81(5-10),A86,A89,A110-114(5-10),A119,A122,A143-147(5-10),A152,A156",
   "design_models": 3,
   "validation_model": "multimer",
   "min_scaffold_sequence_retained_final": 1.0,
