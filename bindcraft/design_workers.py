@@ -57,13 +57,22 @@ def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
         raise ValueError(f'requested GPUs {missing} are not visible to this process')
     return requested
 
+def mebibytes_gb(reading: str) -> float | None:
+    """nvidia-smi prints [N/A] instead of a number, and still exits 0, for a board whose memory it
+    cannot measure - a unified-memory one (DGX Spark GB10) among them."""
+    try:
+        return float(reading) / 1024
+    except ValueError:
+        return None
+
 def nvidia_smi_memory_gb() -> dict[str, tuple[float, float]]:
     try:
         listing = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return {}
     fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    return {index: (float(free_mib) / 1024, float(total_mib) / 1024) for index, free_mib, total_mib in fields}
+    readings = ((index, mebibytes_gb(free_mib), mebibytes_gb(total_mib)) for index, free_mib, total_mib in fields)
+    return {index: (free_gb, total_gb) for index, free_gb, total_gb in readings if None not in (free_gb, total_gb)}
 
 def jax_device_memory_gb() -> dict[str, tuple[float, float]]:
     """Free and total device memory as the PJRT plugin reports it, for plugins that report it."""
