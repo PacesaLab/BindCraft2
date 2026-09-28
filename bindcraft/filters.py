@@ -354,11 +354,11 @@ filter_metric('Interface_Loop_Fraction')(functools.partial(interface_secondary_s
 
 @filter_metric('Binder_RMSD')
 @filter_metric('Induced_Fit_RMSD')
-def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
+def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', confidence_floor: float=0.7) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder, confidence_floor)
     if float(valid_mask.sum()) < 3:
         return None
     aligned_coordinates = align_binder_coordinates(coordinates, reference_coordinates, valid_mask)
@@ -381,22 +381,22 @@ def target_rmsd_metric(protein_states: ProteinStates, predictions: StructurePred
     return float(jnp.sqrt((squared_deviation * valid_mask).sum() / valid_mask.sum()))
 
 @filter_metric('Induced_Fit_Interface_RMSD')
-def induced_fit_interface_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', target: str='target', cutoff: float=8.0, interface_residues: tuple[int, ...]=()) -> float | None:
+def induced_fit_interface_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', target: str='target', cutoff: float=8.0, interface_residues: tuple[int, ...]=(), confidence_floor: float=0.7) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder, confidence_floor)
     interface_mask, alignment_mask = induced_fit_interface_masks(protein_states, predictions, coordinates, valid_mask, prediction_state, target, cutoff, interface_residues)
     if float(interface_mask.sum()) < 3 or float(alignment_mask.sum()) < 3:
         return None
     return float(core_aligned_interface_rmsd(coordinates, reference_coordinates, interface_mask, alignment_mask))
 
 @filter_metric('Induced_Fit_TM')
-def induced_fit_tm_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
+def induced_fit_tm_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', confidence_floor: float=0.7) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder, confidence_floor)
     if float(valid_mask.sum()) < 3:
         return None
     return float(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask))

@@ -266,7 +266,8 @@ def redesign_and_validate_binders(protein_complex: dict[str, Protein],
         ensemble = predict_validation_ensemble(structure_predictor, protein_states, validation_models, stage_filters)
         predictions = ensemble.predictions
         filter_result, metrics = evaluate_design_filters(stage_filters, protein_states, predictions)
-        failed_filters = ensemble.failed_confidence or ([] if filter_result is True else list(filter_result))
+        campaign_failures = [] if filter_result is True else list(filter_result)
+        failed_filters = ensemble.failed_confidence + [name for name in campaign_failures if name not in ensemble.failed_confidence]
         metrics.update(decoded_sequence_metrics(decoded_complex, binder))
         interface_pdae_scores = {name: interface_pdae(protein_states, predictions, prediction_state=prediction_state, binder=binder, target=target) for name, interface_pdae in INTERFACE_PDAE_METRICS.items()}
         print(candidate_outcome(candidate_number, candidate_count, redesign.decode_source or rotation_state, failed_filters, metrics, bool(settings.get('binder_scaffold')), tuple(redesign.validation_states)), flush=True)
