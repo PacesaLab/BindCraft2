@@ -202,9 +202,10 @@ GRADIENT_MEMORY_SHARE = 0.80
 BYTES_PER_GIB = 1 << 30
 
 def worker_memory_budget_bytes() -> float:
-    from bindcraft.design_workers import design_gpu_memory_gb
+    from bindcraft.design_workers import design_gpu_memory_gb, visible_design_gpus
     fraction = float(os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION') or 0.75)
-    return fraction * min(total for _, total in design_gpu_memory_gb().values()) * BYTES_PER_GIB
+    memory = design_gpu_memory_gb()
+    return fraction * min((memory[gpu][1] for gpu in visible_design_gpus() if gpu in memory), default=0.0) * BYTES_PER_GIB
 
 def executable_claimed_bytes(executable) -> float:
     analysis = executable.memory_analysis()
