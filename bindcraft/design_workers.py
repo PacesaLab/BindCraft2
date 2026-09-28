@@ -1,6 +1,7 @@
 import ctypes
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -185,6 +186,11 @@ class TrajectoryOrderedConsole:
                     break
                 print(self.finished.pop(number), end='', flush=True)
 
+    def aside(self, note: str) -> None:
+        """A whole line that is not a trajectory, kept out of the middle of somebody's block."""
+        with self.console_lock:
+            print(note, flush=True)
+
 def relay_worker_output(stream, log_file, console: TrajectoryOrderedConsole, worker_index: int=0) -> None:
     block, trajectory_number = [], None
     try:
@@ -198,6 +204,28 @@ def relay_worker_output(stream, log_file, console: TrajectoryOrderedConsole, wor
             block, trajectory_number = [line], opening
     finally:
         console.hand_over(worker_index, trajectory_number, ''.join(block), None)
+
+def worker_stop_reason(exit_code: int) -> str:
+    """How a worker stopped, named the way a shell names it."""
+    if exit_code >= 0:
+        return f'exited {exit_code}'
+    try:
+        return f'killed by {signal.Signals(-exit_code).name}'
+    except ValueError:
+        return f'killed by signal {-exit_code}'
+
+def campaign_exit_status(exit_codes: list[int]) -> int:
+    """The first worker failure, as a status a shell can read: a signal becomes 128 + its number."""
+    failure = next((exit_code for exit_code in exit_codes if exit_code), 0)
+    return 128 - failure if failure < 0 else failure
+
+def supervise_design_worker(process: subprocess.Popen, log_file, console: TrajectoryOrderedConsole, worker_index: int) -> None:
+    """Relay a worker's output, and say so the moment it stops on anything but its own terms."""
+    try:
+        relay_worker_output(process.stdout, log_file, console, worker_index)
+    finally:
+        if process.wait():
+            console.aside(f'campaign lost design worker {worker_index}, {worker_stop_reason(process.returncode)} | {log_file.name}')
 
 def report_campaign_close(project_folders: tuple[str, ...], requested_designs: int=0, max_trajectories: int | None=None) -> None:
     from bindcraft.campaign_log import campaign_budget_exhausted, campaign_closed
@@ -230,15 +258,18 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
             log_files.append(log_file)
             process = subprocess.Popen(worker_command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             processes.append(process)
-            relay = threading.Thread(target=relay_worker_output, args=(process.stdout, log_file, console, worker_index), daemon=True)
+            relay = threading.Thread(target=supervise_design_worker, args=(process, log_file, console, worker_index), daemon=True)
             relay.start()
             relays.append(relay)
             print(f'worker={worker_index} gpu={worker["card"]} log={log_file.name}', flush=True)
-        exit_codes = [process.wait() for process in processes]
         for relay in relays:
             relay.join()
+        exit_codes = [process.wait() for process in processes]
+        lost = sum(1 for exit_code in exit_codes if exit_code)
+        if lost:
+            console.aside(f'campaign closed {lost} of {len(exit_codes)} design worker(s) short: their trajectories are abandoned, and each is named above with its log')
         report_campaign_close(project_folders, requested_designs, max_trajectories)
-        return next((exit_code for exit_code in exit_codes if exit_code), 0)
+        return campaign_exit_status(exit_codes)
     finally:
         for process in processes:
             if process.poll() is None:
