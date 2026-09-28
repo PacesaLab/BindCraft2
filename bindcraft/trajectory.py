@@ -255,6 +255,25 @@ def judge_stage(trajectory: TrajectoryState, design_settings: BinderDesignSettin
     filter_result, measured = evaluate_design_filters(stage_filters, trajectory.protein_states, filter_predictions) if stage_filters else (True, {})
     return (trajectory if filter_result is True else trajectory._replace(predictions=filter_predictions, failed=tuple(filter_result))), measured
 
+def gate_predictions(design_settings: BinderDesignSettings, design_model: ProteinPredictor, protein_states: ProteinStates, losses: dict[str, DesignLoss]) -> StructurePredictions:
+    """The prediction the mutate and final gates are judged on.
+
+    Every gradient design stage gates on the best round of its pool (run_gradient_design_stage's
+    select_best_round, by weighted design loss). The mutate stage historically gated on a single
+    fresh draw, which samples one AF2 model at random and is far noisier than the estimate the
+    four preceding gates used. mutate_gate_draws=1 keeps that shipped behaviour exactly.
+    """
+    draws = int(design_settings.settings.get('mutate_gate_draws') or 1)
+    if draws <= 1:
+        return design_model.predict(protein_states)
+    best_loss, best_predictions = None, None
+    for _ in range(draws):
+        predictions = design_model.predict(protein_states)
+        design_loss = float(weighted_design_loss(losses, protein_states, predictions))
+        if best_loss is None or design_loss < best_loss:
+            best_loss, best_predictions = design_loss, predictions
+    return best_predictions
+
 def run_mutation_polish(design_settings: BinderDesignSettings, design_model: DifferentiableProteinPredictor, protein_states: ProteinStates, wild_type_states: ProteinStates, losses: dict[str, DesignLoss], binder_alone_reference: StructurePrediction | None, multi_chain_binders: tuple[tuple[str, ...], ...], mutation_random_key: Array, conformation_random_key: Array, target_names: tuple[str, ...], recorder: TrajectoryRecorder | None) -> tuple[ProteinStates, StructurePredictions, str | None]:
     settings = design_settings.settings
     mutate_steps = design_stage_rounds(settings)['mutate']
@@ -269,7 +288,7 @@ def run_mutation_polish(design_settings: BinderDesignSettings, design_model: Dif
         design_schedule = FixedTargetSchedule(mutate_steps)
     protein_states, predictions = run_sequence_mutation_stage(protein_states, design_model, mutation_sampler=mutation_sampler, design_schedule=design_schedule, record_sequence_update=recorder, **induced_fit_reference_arguments(losses, binder_alone_reference, design_model, design_settings))
     protein_states = transfer_binder_sequences(wild_type_states, protein_states)
-    predictions = design_model.predict(protein_states)
+    predictions = gate_predictions(design_settings, design_model, protein_states, losses)
     stage_filters = design_stage_filters(design_settings, protein_states, 'mutate')
     filter_result, measured = evaluate_design_filters(stage_filters, protein_states, predictions) if stage_filters else (True, {})
     print(stage_outcome('mutate', filter_result is True, () if filter_result is True else tuple(filter_result), target_names, measured), flush=True)

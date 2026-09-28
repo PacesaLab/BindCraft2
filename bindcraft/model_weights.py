@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import tarfile
 import urllib.error
 import urllib.request
@@ -65,10 +66,18 @@ def download_alphafold_parameters(destination: Path) -> str:
         staging.mkdir(parents=True)
         archive = staging / 'alphafold_params.tar'
         with urllib.request.urlopen(ALPHAFOLD_PARAMETER_URL, timeout=60) as response, open(archive, 'wb') as archive_file:
+            #The size is whatever is being sent rather than the rounded figure in the announcement,
+            #and the running count is drawn only for a terminal: a carriage return redirected to a
+            #file is one line of a thousand fragments, and a campaign on a cluster always redirects.
+            expected = int(response.headers.get('Content-Length') or 0) / 1e9 or ALPHAFOLD_PARAMETER_GIGABYTES
+            drawing = sys.stdout.isatty()
             while chunk := response.read(1 << 22):
                 archive_file.write(chunk)
-                print(f'\r  {archive_file.tell() / 1e9:.1f} of {ALPHAFOLD_PARAMETER_GIGABYTES:.1f} GB', end='', flush=True)
-        print(f'\r  unpacking {archive.name}', flush=True)
+                if drawing:
+                    print(f'\r  {archive_file.tell() / 1e9:.1f} of {expected:.1f} GB', end='', flush=True)
+        if drawing:
+            print()
+        print(f'  unpacking {archive.name}', flush=True)
         with tarfile.open(archive) as parameters:
             parameters.extractall(staging, filter='data')
         archive.unlink()
