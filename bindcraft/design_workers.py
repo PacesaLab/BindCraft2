@@ -66,13 +66,14 @@ def mebibytes_gb(reading: str) -> float | None:
         return None
 
 def nvidia_smi_memory_gb() -> dict[str, tuple[float, float]]:
+    """Keyed by index and by UUID, because CUDA_VISIBLE_DEVICES can name a board either way."""
     try:
-        listing = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
+        listing = subprocess.run(['nvidia-smi', '--query-gpu=index,uuid,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return {}
     fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    readings = ((index, mebibytes_gb(free_mib), mebibytes_gb(total_mib)) for index, free_mib, total_mib in fields)
-    return {index: (free_gb, total_gb) for index, free_gb, total_gb in readings if None not in (free_gb, total_gb)}
+    readings = ((index, uuid, mebibytes_gb(free_mib), mebibytes_gb(total_mib)) for index, uuid, free_mib, total_mib in fields)
+    return {name: (free_gb, total_gb) for index, uuid, free_gb, total_gb in readings if None not in (free_gb, total_gb) for name in (index, uuid)}
 
 def jax_device_memory_gb() -> dict[str, tuple[float, float]]:
     """Free and total device memory as the PJRT plugin reports it, for plugins that report it."""
