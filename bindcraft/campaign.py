@@ -264,6 +264,7 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     if speaks_for_the_campaign():
         print_campaign_header(settings, project_folder, design_settings)
     design_plan = campaign_design_plan(settings)
+    multi_chain_binders, target_pad_length = design_plan.multi_chain_binders, design_plan.target_pad_length
     alphafold_model = campaign_design_model(design_plan, selected_models.design_models, af2_weights, settings)
     refuse_predictor_without_distogram(settings, alphafold_model)
     mpnn_model = ProteinMPNNSequenceModel(data_dir=mpnn_weights, max_cache_size=16, model_name=settings.get('mpnn_model', 'v_48_020'), variant=settings.get('mpnn_variant', 'negative'), omitted_amino_acids=design_settings.binder.omitted_amino_acids, amino_acid_bias=design_settings.binder.amino_acid_bias, multi_chain_binders=multi_chain_binders, length_bucket_size=length_bucket_size, target_pad_length=target_pad_length) if mpnn_weights and (not settings.get('trajectory_only')) else None
