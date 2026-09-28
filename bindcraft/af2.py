@@ -197,6 +197,26 @@ def alphafold_model_family(model_name: str) -> tuple:
         return ('multimer',)
     return 'monomer', tuple(sorted(af_config.CONFIG_DIFFS.get(model_name, {}).items()))
 
+ATTENTION_FALLBACK_BACKEND = 'chunked'
+GRADIENT_MEMORY_SHARE = 0.80
+BYTES_PER_GIB = 1 << 30
+
+def worker_memory_budget_bytes() -> float:
+    from bindcraft.design_workers import design_gpu_memory_gb
+    fraction = float(os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION') or 0.75)
+    return fraction * min(total for _, total in design_gpu_memory_gb().values()) * BYTES_PER_GIB
+
+def executable_claimed_bytes(executable) -> float:
+    analysis = executable.memory_analysis()
+    return float(analysis.temp_size_in_bytes + analysis.argument_size_in_bytes + analysis.output_size_in_bytes)
+
+def executable_fits(executable) -> bool:
+    return executable_claimed_bytes(executable) <= GRADIENT_MEMORY_SHARE * worker_memory_budget_bytes()
+
+def is_out_of_memory(failure: BaseException) -> bool:
+    text = str(failure).lower()
+    return 'resource_exhausted' in text or 'out of memory' in text
+
 SUBBATCH_RESIDUE_THRESHOLD = 384
 LARGE_COMPLEX_SUBBATCH_SIZE = 4
 
@@ -239,9 +259,14 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.model_parameters[model_name] = model_parameters
         self.prediction_compile_cache = CompiledModelCache(max_cache_size)
         self.gradient_compile_cache = CompiledModelCache(max_cache_size)
+        self.shape_attention_backend: dict = {}
+        self.executed_lengths: set[int] = set()
+        self.last_attention_backend = self.attention_backend
+        self.last_gradient_bytes: float | None = None
 
-    def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None) -> af_model.RunModel:
-        runner_key = model_family, subbatch_size, self.attention_backend, self.use_cueq
+    def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None, attention_backend: str | None=None) -> af_model.RunModel:
+        attention_backend = attention_backend or self.attention_backend
+        runner_key = model_family, subbatch_size, attention_backend, self.use_cueq
         alphafold_runner = self.alphafold_runners.get(runner_key)
         if alphafold_runner is None:
             model_name = self.model_family_models[model_family]
@@ -251,7 +276,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             model_config.model.global_config.use_remat = True
             model_config.model.global_config.bfloat16 = True
             model_config.model.global_config.subbatch_size = subbatch_size
-            model_config.model.global_config.attention_backend = self.attention_backend
+            model_config.model.global_config.attention_backend = attention_backend
             model_config.model.global_config.use_cueq = self.use_cueq
             model_config.model.num_recycle = 0
             alphafold_runner = af_model.RunModel(model_config, params=None, use_multimer=use_multimer)
@@ -327,14 +352,22 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             metrics = trim_padded_metrics(metrics, real_residue_positions(chain_lengths, true_lengths))
         return StructurePrediction(protein_complex=predicted_complex, metrics=metrics)
 
-    def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss]) -> Callable:
+    def _fall_back_to_chunked(self, model: str, complex_shapes: tuple, reference_shapes: tuple, losses: dict[str, DesignLoss], gradient_arguments: tuple, shape_signature: tuple, residue_total: int, reason: str) -> Callable:
+        print(f'{self.attention_backend} attention {reason} at {residue_total} padded residues; using the {ATTENTION_FALLBACK_BACKEND} route for this shape instead', flush=True)
+        self.shape_attention_backend[shape_signature] = ATTENTION_FALLBACK_BACKEND
+        compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, ATTENTION_FALLBACK_BACKEND)
+        self.last_gradient_bytes = executable_claimed_bytes(compiled_gradient.lower(*gradient_arguments).compile())
+        return compiled_gradient
+
+    def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss], attention_backend: str | None=None) -> Callable:
         model_family = self.model_families[model]
         loss_signature = tuple((name, losses[name].function, losses[name].required_states) for name in sorted(losses))
         state_subbatch_sizes = tuple((state_name, resolve_subbatch_size(sum(chain_lengths), self.subbatch_size)) for state_name, _, chain_lengths in complex_shapes)
-        cache_key = model_family, complex_shapes, reference_shapes, loss_signature, state_subbatch_sizes, self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization
+        attention_backend = attention_backend or self.attention_backend
+        cache_key = model_family, complex_shapes, reference_shapes, loss_signature, state_subbatch_sizes, self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization, attention_backend
         compiled_gradient = self.gradient_compile_cache.get(cache_key)
         if compiled_gradient is None:
-            state_alphafold_runners = {state_name: self._alphafold_runner(model_family, subbatch_size) for state_name, subbatch_size in state_subbatch_sizes}
+            state_alphafold_runners = {state_name: self._alphafold_runner(model_family, subbatch_size, attention_backend) for state_name, subbatch_size in state_subbatch_sizes}
             def predict_complex_arrays(alphafold_runner: af_model.RunModel, model_parameters: Array, key: Array, chain_names: tuple[str, ...], chain_lengths: tuple[int, ...], sequence: Array, atoms: Array, atom_mask: Array, flags: Array, residue_index: Array, dropout: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array):
                 asym_id = residue_chain_ids(chain_lengths)
                 entity_id = residue_entity_ids(chain_names, chain_lengths, self.multi_chain_binders)
@@ -399,13 +432,35 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         reference_templates = {state_name: concatenate_chain_arrays(state_chain_names, reference_states[state_name], 'atoms', 'atom_mask', 'flags', 'residue_index') for state_name, state_chain_names, _ in reference_shapes}
         weights = {name: jnp.asarray(entry.weight, dtype=jnp.float32) for name, entry in losses.items()}
         frozen_interfaces = frozen_interface_arguments(losses, shared_chains)
-        compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses)
+        shape_signature = self.model_families[model], complex_shapes, reference_shapes
+        residue_total = sum(sum(chain_lengths) for _, _, chain_lengths in complex_shapes)
+        attention_backend = self.shape_attention_backend.get(shape_signature, self.attention_backend)
+        compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
         with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses)))):
-            compiled_sequence_gradients.lower(*gradient_arguments).compile()
+            executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
+            if shape_signature not in self.shape_attention_backend:
+                self.shape_attention_backend[shape_signature] = attention_backend
+                self.last_gradient_bytes = executable_claimed_bytes(executable)
+                if attention_backend != ATTENTION_FALLBACK_BACKEND and not executable_fits(executable):
+                    attention_backend = ATTENTION_FALLBACK_BACKEND
+                    compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'needs more than this worker may allocate')
+        self.last_attention_backend = attention_backend
         if compile_only:
             return {}, {}, jnp.asarray(0.0)
-        (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
+        try:
+            (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
+            if residue_total not in self.executed_lengths:
+                jax.block_until_ready(((design_loss, prediction_arrays), shared_chain_gradients))
+                self.executed_lengths.add(residue_total)
+        except Exception as gradient_failure:
+            if attention_backend == ATTENTION_FALLBACK_BACKEND or not is_out_of_memory(gradient_failure):
+                raise
+            compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'ran out of memory despite fitting the check')
+            self.last_attention_backend = ATTENTION_FALLBACK_BACKEND
+            (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
+            jax.block_until_ready(((design_loss, prediction_arrays), shared_chain_gradients))
+            self.executed_lengths.add(residue_total)
         predictions: StructurePredictions = {}
         for canonical_state, canonical_chains, chain_lengths in complex_shapes:
             state_name = state_source_names[canonical_state]

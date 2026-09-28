@@ -5,7 +5,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
+from bindcraft.af2 import GRADIENT_MEMORY_SHARE, campaign_length_bucket, padded_prediction_length, worker_memory_budget_bytes
 from bindcraft.campaign_output import json_compatible
 from bindcraft.protein_preparation import design_residue_count
 from bindcraft.settings import build_design_settings
@@ -86,15 +86,14 @@ def host_memory_worker_ceiling(gpu_count: int) -> int:
         return MAXIMUM_WORKERS_PER_GPU
     return max(1, int(available_gb // HOST_MEMORY_PER_WORKER_GB) // gpu_count)
 
-SUBBATCH_MEMORY_SHARE = 0.5
+UNSHARDED_BYTES_PER_RESIDUE_PAIR = 47952
 PACKED_LAUNCH_STAGGER_SECONDS = 0.0
 
 def campaign_subbatch_size(settings: dict, residue_count: int | None) -> int | None | str:
     requested = settings.get('subbatch_size', 'auto')
     if requested != 'auto' or not residue_count:
         return requested
-    free_gb = max((free for free, _ in design_gpu_memory_gb().values()), default=0.0)
-    return None if free_gb and estimate_design_memory_gb(residue_count) <= SUBBATCH_MEMORY_SHARE * free_gb else requested
+    return None if UNSHARDED_BYTES_PER_RESIDUE_PAIR * residue_count ** 2 <= GRADIENT_MEMORY_SHARE * worker_memory_budget_bytes() else requested
 
 def design_worker_launch_stagger(settings: dict) -> float:
     return float(os.environ.get('BINDCRAFT_WORKER_LAUNCH_STAGGER', settings.get('worker_launch_stagger', PACKED_LAUNCH_STAGGER_SECONDS)))
