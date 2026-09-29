@@ -1,5 +1,4 @@
 {
-  "modality": "induced_fit",
   "target": "hPDL1",
   "modality": "induced_fit",
   "binder_lengths": [
@@ -19,7 +18,10 @@
   "min_iptm_final": 0.6,
   "min_monomer_plddt_final": 0.7,
   "project_folder": "results/pdl1_induced_fit_interface",
-  "aa_bias": {
-    "C": 0
-  }
+  "aa_bias": [
+    {
+      "C": 0
+    },
+    {}
+  ]
 }

@@ -1,5 +1,4 @@
 {
-  "modality": "fold_switch",
   "target": "hPDL1",
   "modality": "fold_switch",
   "binder_lengths": [
@@ -18,25 +17,37 @@
   "weights_fold_switching": 3,
   "weights_compactness": 0.15,
   "weights_binder_contacts": 0.5,
-  "losses": {
-    "fold_switching": {
-      "params": {
-        "tm_target": 0.45,
-        "binder_shapes": [
-          [
-            "hPDL1"
-          ],
-          [
-            "binder_alone"
+  "losses": [
+    {
+      "fold_switching": [
+        {
+          "params": [
+            {
+              "tm_target": 0.45,
+              "binder_shapes": [
+                [
+                  "hPDL1"
+                ],
+                [
+                  "binder_alone"
+                ]
+              ]
+            },
+            {}
           ]
-        ]
-      }
-    }
-  },
+        },
+        {}
+      ]
+    },
+    {}
+  ],
   "project_folder": "results/pdl1_fold_switching",
-  "aa_bias": {
-    "C": 0
-  },
+  "aa_bias": [
+    {
+      "C": 0
+    },
+    {}
+  ],
   "binder_shapes": [
     [
       "hPDL1"
