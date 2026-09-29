@@ -1,4 +1,5 @@
 {
+  "modality": "peptide",
   "target": "hPDL1",
   "binder_lengths": [
     12,

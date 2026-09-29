@@ -1,4 +1,5 @@
 {
+  "modality": "binder",
   "target": "hPDL1",
   "binder_lengths": [
     60,

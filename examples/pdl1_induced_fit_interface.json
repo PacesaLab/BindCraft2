@@ -1,4 +1,5 @@
 {
+  "modality": "induced_fit",
   "target": "hPDL1",
   "binder_lengths": [
     60,

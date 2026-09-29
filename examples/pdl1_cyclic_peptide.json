@@ -1,4 +1,5 @@
 {
+  "modality": "cyclic_peptide",
   "target": "hPDL1",
   "binder_lengths": [
     6,

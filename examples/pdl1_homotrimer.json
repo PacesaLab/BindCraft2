@@ -1,4 +1,5 @@
 {
+  "modality": "homo_oligomer",
   "target": "hPDL1",
   "binder_lengths": [
     40,

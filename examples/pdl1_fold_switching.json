@@ -1,4 +1,5 @@
 {
+  "modality": "fold_switch",
   "target": "hPDL1",
   "binder_lengths": [
     120,

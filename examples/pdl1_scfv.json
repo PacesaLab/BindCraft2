@@ -1,4 +1,5 @@
 {
+  "modality": "scFv",
   "target": "hPDL1",
   "binder_scaffold": "../scaffolds/scFv.cif",
   "mutate_positions": "L30-32,L91-94,L96,H31-33,H50,H52-55(4-6),H57,H59,H99-106(5-18),H72*",
