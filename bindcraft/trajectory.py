@@ -58,8 +58,6 @@ def binder_alone_switch_reached(metrics: dict[str, float | None], losses: dict[s
         parameters = losses[name].function.keywords
         if name.split('.')[0] == 'induced_fit_interface' and (metrics['interface_rmsd'] or 0.0) < float(parameters.get('interface_rmsd_target', 3.0)):
             return False
-        if name.split('.')[0] == 'fold_switching' and (metrics['global_tm'] is None or metrics['global_tm'] > float(parameters.get('tm_target', 0.6))):
-            return False
     return True
 
 def binder_alone_reference_refresh(design_model: ProteinPredictor, design_settings: BinderDesignSettings) -> Callable[..., StructurePredictions | None]:
@@ -234,7 +232,7 @@ def build_stage_plan(design_settings: BinderDesignSettings, losses: dict[str, De
     return tuple(stage_plan)
 
 def required_final_states(design_settings: BinderDesignSettings, losses: dict[str, DesignLoss]) -> tuple[str, ...]:
-    switches_conformation = any(BINDER_ALONE in group for group in design_settings.binder_shapes)
+    switches_conformation = any(BINDER_ALONE in group for group in design_settings.binder_shapes) or any(name.startswith('fold_switching') for name in losses)
     return (BINDER_ALONE,) if induced_fit_hinge_names(losses) or switches_conformation else ()
 
 def run_stage_operations(operations: tuple[StageOperation, ...], trajectory: TrajectoryState) -> TrajectoryState:
@@ -282,7 +280,7 @@ def run_mutation_polish(design_settings: BinderDesignSettings, design_model: Dif
     design_model.dropout = False
     #pLDDT weighting, for multitargeting
     mutation_sampler = SemigreedySequenceSampler(key=mutation_random_key, multi_chain_binders=multi_chain_binders, mutation_weighting='plddt' if len(design_settings.prepared_states) > 1 else 'interface_iptm')
-    design_schedule = build_design_schedule(design_settings, wild_type_states, losses, mutate_steps, conformation_random_key, False)
+    design_schedule = build_design_schedule(design_settings, wild_type_states, losses, mutate_steps, conformation_random_key)
     if len(design_settings.prepared_states) > 1:
         protein_states = transfer_binder_sequences(wild_type_states, protein_states)
         design_schedule = FixedTargetSchedule(mutate_steps)
@@ -318,7 +316,7 @@ def run_trajectory(design_settings: BinderDesignSettings, design_model: Differen
             recorder.sequence_parameters = stage.sequence_optimizer.sequence_parameters
         trajectory = run_stage_operations(stage.prepare, trajectory)
         design_model.dropout = stage.dropout and settings.get('design_dropout', DEFAULT_SETTINGS['design_dropout'])
-        design_schedule = build_design_schedule(design_settings, trajectory.design_target_states, trajectory.losses, stage.sequence_optimizer.iterations, conformation_random_key, False, target_schedule, stage.name)
+        design_schedule = build_design_schedule(design_settings, trajectory.design_target_states, trajectory.losses, stage.sequence_optimizer.iterations, conformation_random_key, target_schedule, stage.name)
         protein_states, predictions = run_gradient_design_stage(trajectory.protein_states, design_model, sequence_optimizer=stage.sequence_optimizer, design_schedule=design_schedule, record_sequence_update=recorder, select_best_round=len(design_settings.prepared_states) < 2, select_filtered_round=rotating_stage_filter_round(design_settings, target_schedule, trajectory.protein_states, stage.name), **induced_fit_reference_arguments(trajectory.losses, trajectory.binder_alone_reference, design_model, design_settings))
         if predictions is None:
             trajectory = trajectory._replace(predictions={}, failed=('no finite round',))

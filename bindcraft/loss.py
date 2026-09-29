@@ -709,7 +709,7 @@ def frozen_interface_arguments(losses: dict[str, DesignLoss], padded_chains: dic
     return {name: {'interface_mask': jnp.pad(interface_mask, [0, len(padded_chains[losses[name].function.keywords.get('chain', 'binder')]) - len(interface_mask)])} for name, interface_mask in frozen.items()}
 
 def induced_fit_hinge_names(losses: dict[str, DesignLoss]) -> tuple[str, ...]:
-    return tuple(name for name in losses if name.split('.')[0] in ('induced_fit_interface', 'fold_switching'))
+    return tuple(name for name in losses if name.split('.')[0] == 'induced_fit_interface')
 
 BINDER_ALONE_LOSS_NAMES = ('plddt_loss', 'binder_pae', 'compactness', 'binder_contacts', 'binder_helicity')
 PROTOMER_SCOPED_LOSSES = ('binder_pae', 'compactness', 'binder_contacts')

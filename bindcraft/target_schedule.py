@@ -17,15 +17,14 @@ def build_target_schedule(design_settings: BinderDesignSettings, target_states: 
     epitope_rotation_interval = design_model_count(settings) if int(settings.get('idr_crop_count', 1)) > 1 else None
     return MultitargetSchedule(targets, target_objectives, iterations, iptm_threshold=settings.get('multitarget_swap_threshold', 0.5), swap_patience=settings.get('multitarget_swap_patience', 20), warmup_swap_patience=settings.get('multitarget_warmup_patience'), target_chain=target_chain, epitope_rotation_interval=epitope_rotation_interval, merged_target_gradients=merged_gradient_targets(design_settings, design_stage) > 1, max_detarget_iptm=settings.get('max_detarget_iptm', 0.4), detarget_check_interval=settings.get('detarget_check_interval', DEFAULT_DETARGET_CHECK_INTERVAL), max_detarget_rounds=settings.get('max_detarget_rounds', 10), max_detarget_interface_residues=settings.get('max_detarget_interface_residues_final', DEFAULT_DETARGET_INTERFACE_RESIDUES))
 
-def build_design_schedule(design_settings: BinderDesignSettings, target_states: ProteinStates, losses: dict[str, DesignLoss], iterations: int, conformation_random_key: Array, induced_fit_active: bool=True, target_schedule: 'IterationLimitedDesignSchedule | None'=None, design_stage: str=MERGED_GRADIENT_STAGE) -> 'DesignSchedule':
+def build_design_schedule(design_settings: BinderDesignSettings, target_states: ProteinStates, losses: dict[str, DesignLoss], iterations: int, conformation_random_key: Array, target_schedule: 'IterationLimitedDesignSchedule | None'=None, design_stage: str=MERGED_GRADIENT_STAGE) -> 'DesignSchedule':
     settings = design_settings.settings
     target_chain = design_settings.target_chain_prefix
     targets = {state.name: target_states[state.name][state.target_chain] for state in design_settings.prepared_states}
     target_schedule = target_schedule.restart_for_stage(iterations, targets, merged_gradient_targets(design_settings, design_stage) > 1) if target_schedule is not None else build_target_schedule(design_settings, target_states, iterations, design_stage)
     if not targets:
         return target_schedule
-    induced_fit = induced_fit_active and any(name.startswith(('induced_fit_interface', 'fold_switching')) for name in losses)
-    conformation_groups = (tuple(targets), (BINDER_ALONE,)) if induced_fit else design_settings.binder_shapes
+    conformation_groups = design_settings.binder_shapes or ((tuple(targets), (BINDER_ALONE,)) if any(name.startswith('fold_switching') for name in losses) else ())
     if not conformation_groups:
         return target_schedule
     remove_target_chains = {target_chain_name(target_chain, name): None for name in targets}
