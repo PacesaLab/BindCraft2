@@ -4,6 +4,7 @@ import biotite.structure as struc
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import Array
 from typing import Callable, NamedTuple, TYPE_CHECKING
 from bindcraft.epitope_targeting import EPITOPE_CUTOFF, epitope_residues
 from bindcraft.developability import mhc_panels
@@ -352,18 +353,26 @@ filter_metric('Interface_Helix_Fraction')(functools.partial(interface_secondary_
 filter_metric('Interface_BetaSheet_Fraction')(functools.partial(interface_secondary_structure_fraction, secondary_structure_code='b'))
 filter_metric('Interface_Loop_Fraction')(functools.partial(interface_secondary_structure_fraction, secondary_structure_code='c'))
 
-@filter_metric('Binder_RMSD')
-@filter_metric('Induced_Fit_RMSD')
-def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
-    prediction_state = resolve_prediction_state(predictions, prediction_state)
-    if prediction_state not in predictions or reference_state not in predictions:
-        return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+def weighted_binder_rmsd(coordinates: Array, reference_coordinates: Array, valid_mask: Array) -> float | None:
     if float(valid_mask.sum()) < 3:
         return None
     aligned_coordinates = align_binder_coordinates(coordinates, reference_coordinates, valid_mask)
     squared_deviation = jnp.square(aligned_coordinates - reference_coordinates).sum(-1)
     return float(jnp.sqrt((squared_deviation * valid_mask).sum() / valid_mask.sum()))
+
+@filter_metric('Binder_RMSD')
+def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    if prediction_state not in predictions or reference_state not in predictions:
+        return None
+    return weighted_binder_rmsd(*bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder))
+
+@filter_metric('Induced_Fit_RMSD')
+def induced_fit_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', confidence_floor: float=0.7) -> float | None:
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    if prediction_state not in predictions or reference_state not in predictions:
+        return None
+    return weighted_binder_rmsd(*confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor))
 
 @filter_metric('Target_RMSD')
 def target_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', target: str='target') -> float | None:
