@@ -1,6 +1,6 @@
 {
-  "target": "hPDL1",
   "modality": "fold_switch",
+  "target": "hPDL1",
   "binder_lengths": [
     120,
     180

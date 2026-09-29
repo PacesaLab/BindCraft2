@@ -1,5 +1,8 @@
 {
-  "target": ["hPDL1", "mPDL1"],
+  "target": [
+    "hPDL1",
+    "mPDL1"
+  ],
   "binder_lengths": [
     60,
     100
