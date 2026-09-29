@@ -403,9 +403,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 weighted_losses = {name: weights[name] * entry.function(protein_states, loss_predictions, **frozen_interfaces.get(name, {})) for name, entry in losses.items()}
                 total_loss = sum(weighted_losses.values()) if weighted_losses else jnp.asarray(0.0)
                 for name, entry in losses.items():
-                    for state_name in entry.required_states or prediction_arrays.keys():
-                        if state_name not in prediction_arrays:
-                            continue
+                    for state_name in (entry.required_states or prediction_arrays.keys()) & prediction_arrays.keys():
                         metrics = prediction_arrays[state_name][2]
                         if name in metrics:
                             raise ValueError(f'loss {name!r} would overwrite an existing metric on {state_name!r}')
