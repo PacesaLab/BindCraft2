@@ -54,7 +54,7 @@ The other examples below demonstrate explicit settings for particular experiment
 | [pdl1_multidomain.json](pdl1_multidomain.json) | Multidomain | Two domains on one chain, with size, separation and linker objectives. |
 | [pdl1_mixed_topology.json](pdl1_mixed_topology.json) | Mixed topology | Apply a 50% helix ceiling and a 20% beta-sheet floor. |
 | [pdl1_induced_fit_interface.json](pdl1_induced_fit_interface.json) | Induced fit at the interface | Encourage at least 5 Å of predicted interface movement between free and bound states. |
-| [pdl1_induced_fit_global.json](pdl1_induced_fit_global.json) | Global induced fit | Encourage a whole-fold difference between predicted free and bound states, with a TM-score ceiling of 0.6. |
+| [pdl1_induced_fit_global.json](pdl1_induced_fit_global.json) | Fold switching, whole fold | Encourage a whole-fold difference between predicted free and bound states, with a TM-score ceiling of 0.6. |
 | [pdl1_fold_switching.json](pdl1_fold_switching.json) | Fold switching | Assign different intended binder shapes to the PD-L1-bound and binder-alone states. |
 | [pdl1_disulfide.json](pdl1_disulfide.json) | Disulfides | Allow cysteines, favour pairing and require at least one geometrically detected disulfide. |
 | [pdl1_humanization.json](pdl1_humanization.json) | Humanization | Apply sequence preferences and an MHC-II anchor-score ceiling. |

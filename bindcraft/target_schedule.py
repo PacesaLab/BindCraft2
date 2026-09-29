@@ -24,7 +24,7 @@ def build_design_schedule(design_settings: BinderDesignSettings, target_states: 
     target_schedule = target_schedule.restart_for_stage(iterations, targets, merged_gradient_targets(design_settings, design_stage) > 1) if target_schedule is not None else build_target_schedule(design_settings, target_states, iterations, design_stage)
     if not targets:
         return target_schedule
-    induced_fit = induced_fit_active and any(name.startswith(('induced_fit_interface', 'induced_fit_global')) for name in losses)
+    induced_fit = induced_fit_active and any(name.startswith(('induced_fit_interface', 'fold_switching')) for name in losses)
     conformation_groups = (tuple(targets), (BINDER_ALONE,)) if induced_fit else design_settings.binder_shapes
     if not conformation_groups:
         return target_schedule

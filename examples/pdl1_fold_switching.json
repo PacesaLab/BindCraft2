@@ -20,15 +20,7 @@
   "losses": {
     "fold_switching": {
       "params": {
-        "tm_target": 0.45,
-        "binder_shapes": [
-          [
-            "hPDL1"
-          ],
-          [
-            "binder_alone"
-          ]
-        ]
+        "tm_target": 0.45
       }
     }
   },

@@ -58,7 +58,7 @@ def binder_alone_switch_reached(metrics: dict[str, float | None], losses: dict[s
         parameters = losses[name].function.keywords
         if name.split('.')[0] == 'induced_fit_interface' and (metrics['interface_rmsd'] or 0.0) < float(parameters.get('interface_rmsd_target', 3.0)):
             return False
-        if name.split('.')[0] == 'induced_fit_global' and (metrics['global_tm'] is None or metrics['global_tm'] > float(parameters.get('tm_target', 0.6))):
+        if name.split('.')[0] == 'fold_switching' and (metrics['global_tm'] is None or metrics['global_tm'] > float(parameters.get('tm_target', 0.6))):
             return False
     return True
 
