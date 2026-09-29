@@ -11,8 +11,6 @@ BindCraft2 needs Linux, Python 3.12 or newer and a GPU. One command installs it 
 ```bash
 git clone https://github.com/PacesaLab/BindCraft2.git
 cd BindCraft2
-git clone https://github.com/PacesaLab/BindCraft2.git
-cd BindCraft2
 bash install.sh
 source .venv/bin/activate
 ```
