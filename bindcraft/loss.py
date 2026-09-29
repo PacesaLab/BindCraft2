@@ -668,18 +668,22 @@ def aligned_binder_tm_score(coordinates: Array, reference_coordinates: Array, va
 def binder_state_confidence(prediction: StructurePrediction, chain: str) -> Array:
     return jnp.asarray(prediction.metrics['plddt'])[chain_residue_slices(prediction.protein_complex)[chain]]
 
-def bound_and_unbound_binder_coordinates(predictions: StructurePredictions, prediction_state: str, reference_state: str, chain: str, confidence_floor: float=0.7) -> tuple[Array, Array, Array]:
+def bound_and_unbound_binder_coordinates(predictions: StructurePredictions, prediction_state: str, reference_state: str, chain: str) -> tuple[Array, Array, Array]:
     coordinates, mask = chain_atom_coordinates(predictions[prediction_state].protein_complex[chain])
     reference_coordinates, reference_mask = chain_atom_coordinates(predictions[reference_state].protein_complex[chain])
+    return coordinates, reference_coordinates, mask * reference_mask
+
+def confident_binder_comparison(predictions: StructurePredictions, prediction_state: str, reference_state: str, chain: str, confidence_floor: float=0.7) -> tuple[Array, Array, Array]:
+    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, chain)
     confidence = jnp.minimum(binder_state_confidence(predictions[prediction_state], chain), binder_state_confidence(predictions[reference_state], chain))
-    return coordinates, reference_coordinates, mask * reference_mask * jax.nn.relu(confidence - confidence_floor) / (1.0 - confidence_floor + 1e-08)
+    return coordinates, reference_coordinates, valid_mask * jax.nn.relu(confidence - confidence_floor) / (1.0 - confidence_floor + 1e-08)
 
 @loss('induced_fit_global', target_weighting='every_target')
 def induced_fit_global_loss(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, chain: str='binder', tm_target: float=0.6, confidence_floor: float=0.7) -> Array:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return jnp.asarray(0.0)
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, chain, confidence_floor)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, chain, confidence_floor)
     return jnp.square(jax.nn.relu(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask) - tm_target)) * (valid_mask.sum() >= 3)
 
 def binder_interface_mask(protein_states: ProteinStates, predictions: StructurePredictions, chain: str='binder', target: str='target', cutoff: float=8.0) -> Array:
@@ -766,7 +770,7 @@ def induced_fit_interface_loss(protein_states: ProteinStates, predictions: Struc
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return jnp.asarray(0.0)
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, chain, confidence_floor)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, chain, confidence_floor)
     interface_mask, alignment_mask = induced_fit_interface_masks(protein_states, predictions, coordinates, valid_mask, prediction_state, target, cutoff, interface_mask=interface_mask)
     interface_rmsd = core_aligned_interface_rmsd(coordinates, reference_coordinates, interface_mask, alignment_mask)
     return jnp.square(jax.nn.relu(interface_rmsd_target - interface_rmsd)) * (interface_mask.sum() >= 3) * (alignment_mask.sum() >= 3)

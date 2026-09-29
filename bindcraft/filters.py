@@ -7,7 +7,7 @@ import numpy as np
 from typing import Callable, NamedTuple, TYPE_CHECKING
 from bindcraft.epitope_targeting import EPITOPE_CUTOFF, epitope_residues
 from bindcraft.developability import mhc_panels
-from bindcraft.loss import _masked_mean, align_binder_coordinates, aligned_binder_tm_score, bind_state_metric, binder_binding_mask, binder_copy_chains, binder_framework_mask, bound_and_unbound_binder_coordinates, chain_atom_coordinates, chain_pair_pae_loss, chain_residue_slices, complex_residue_weights, core_aligned_interface_rmsd, induced_fit_interface_masks, mhc_epitope_score, pairwise_atom_distances, pooled_protease_site_score, resolve_binder_role, resolve_prediction_state, resolve_target_chain, soft_maximum, terminus_target_direction_cosine
+from bindcraft.loss import _masked_mean, align_binder_coordinates, aligned_binder_tm_score, bind_state_metric, binder_binding_mask, binder_copy_chains, binder_framework_mask, bound_and_unbound_binder_coordinates, chain_atom_coordinates, confident_binder_comparison, chain_pair_pae_loss, chain_residue_slices, complex_residue_weights, core_aligned_interface_rmsd, induced_fit_interface_masks, mhc_epitope_score, pairwise_atom_distances, pooled_protease_site_score, resolve_binder_role, resolve_prediction_state, resolve_target_chain, soft_maximum, terminus_target_direction_cosine
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, BINDER_ALONE, Protein, ProteinStates, ResidueFlags, StructurePredictions, build_atom_array, has_residue_flag, output_chain_letters, parse_scaffold_edits, real_residue_count, real_residue_mask, redesignable_residue_mask, structure_chain_names
 
 if TYPE_CHECKING:
@@ -354,11 +354,11 @@ filter_metric('Interface_Loop_Fraction')(functools.partial(interface_secondary_s
 
 @filter_metric('Binder_RMSD')
 @filter_metric('Induced_Fit_RMSD')
-def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', confidence_floor: float=0.7) -> float | None:
+def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder, confidence_floor)
+    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
     if float(valid_mask.sum()) < 3:
         return None
     aligned_coordinates = align_binder_coordinates(coordinates, reference_coordinates, valid_mask)
@@ -385,7 +385,7 @@ def induced_fit_interface_rmsd_metric(protein_states: ProteinStates, predictions
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder, confidence_floor)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor)
     interface_mask, alignment_mask = induced_fit_interface_masks(protein_states, predictions, coordinates, valid_mask, prediction_state, target, cutoff, interface_residues)
     if float(interface_mask.sum()) < 3 or float(alignment_mask.sum()) < 3:
         return None
@@ -396,7 +396,7 @@ def induced_fit_tm_metric(protein_states: ProteinStates, predictions: StructureP
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder, confidence_floor)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor)
     if float(valid_mask.sum()) < 3:
         return None
     return float(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask))

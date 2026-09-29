@@ -1,5 +1,6 @@
 {
   "target": "hPDL1",
+  "modality": "fold_switch",
   "binder_lengths": [
     120,
     180
@@ -31,7 +32,6 @@
       }
     }
   },
-  "max_induced_fit_tm_final": 0.6,
   "project_folder": "results/pdl1_fold_switching",
   "aa_bias": {
     "C": 0
