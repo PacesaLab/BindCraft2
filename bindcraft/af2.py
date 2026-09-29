@@ -11,7 +11,7 @@ from bindcraft.af.alphafold.common import confidence, residue_constants
 from bindcraft.af.alphafold.model import config as af_config, data as af_data, model as af_model, modules as af_modules
 from bindcraft.af import accel
 from bindcraft.prediction import DifferentiableProteinPredictor, CompiledModelCache, residue_chain_ids, concatenate_chain_arrays, collect_shared_chains, split_residue_arrays_by_chain
-from bindcraft.loss import DesignLoss, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
+from bindcraft.loss import DesignLoss, chain_residue_slices, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
 from bindcraft.sequence_optimization import sequence_features_from_logits
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
 
@@ -171,6 +171,11 @@ def trim_prediction_padding(value: Array, residue_count: int) -> Array:
     if value.ndim == 1:
         return value[:residue_count]
     return value[:residue_count, :residue_count]
+
+def reference_state_confidence(prediction: StructurePrediction, chain_names: dict[str, str], shared_chains: dict[str, Protein], state_chain_names: tuple[str, ...]) -> Array:
+    confidence_values = jnp.asarray(prediction.metrics['plddt'], dtype=jnp.float32)
+    per_chain = {chain_names.get(name, name): confidence_values[chain_slice] for name, chain_slice in chain_residue_slices(prediction.protein_complex).items()}
+    return jnp.concatenate([jnp.pad(per_chain[name], (0, len(shared_chains[name]) - len(per_chain[name]))) for name in state_chain_names])
 
 def protein_state_shapes(protein_states: ProteinStates) -> tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...]:
     complex_shapes = []
@@ -399,7 +404,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 for state_name, state_chain_names, chain_lengths in reference_shapes:
                     template = reference_templates[state_name]
                     chain_arrays = split_residue_arrays_by_chain(state_chain_names, chain_lengths, sequence=jnp.concatenate([sequences[name] for name in state_chain_names], axis=0), atoms=template['atoms'], atom_mask=template['atom_mask'], flags=template['flags'], residue_index=template['residue_index'])
-                    loss_predictions[state_name] = StructurePrediction(protein_complex={name: Protein(**chain_arrays[name]) for name in state_chain_names}, metrics={})
+                    loss_predictions[state_name] = StructurePrediction(protein_complex={name: Protein(**chain_arrays[name]) for name in state_chain_names}, metrics={'plddt': template['plddt']})
                 weighted_losses = {name: weights[name] * entry.function(protein_states, loss_predictions, **frozen_interfaces.get(name, {})) for name, entry in losses.items()}
                 total_loss = sum(weighted_losses.values()) if weighted_losses else jnp.asarray(0.0)
                 for name, entry in losses.items():
@@ -430,7 +435,8 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         reference_states = {state_names.get(state, state): {chain_names.get(name, name): protein.padded_to(len(shared_chains[chain_names.get(name, name)])) for name, protein in prediction.protein_complex.items() if chain_names.get(name, name) in shared_chains} for state, prediction in (reference_predictions or {}).items()}
         reference_states = {state: protein_complex for state, protein_complex in reference_states.items() if protein_complex}
         reference_shapes = protein_state_shapes(reference_states)
-        reference_templates = {state_name: concatenate_chain_arrays(state_chain_names, reference_states[state_name], 'atoms', 'atom_mask', 'flags', 'residue_index') for state_name, state_chain_names, _ in reference_shapes}
+        reference_confidence = {state_names.get(state, state): prediction for state, prediction in (reference_predictions or {}).items()}
+        reference_templates = {state_name: {**concatenate_chain_arrays(state_chain_names, reference_states[state_name], 'atoms', 'atom_mask', 'flags', 'residue_index'), 'plddt': reference_state_confidence(reference_confidence[state_name], chain_names, shared_chains, state_chain_names)} for state_name, state_chain_names, _ in reference_shapes}
         weights = {name: jnp.asarray(entry.weight, dtype=jnp.float32) for name, entry in losses.items()}
         frozen_interfaces = frozen_interface_arguments(losses, shared_chains)
         shape_signature = self.model_families[model], complex_shapes, reference_shapes
