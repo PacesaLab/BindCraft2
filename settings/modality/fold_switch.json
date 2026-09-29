@@ -1,6 +1,6 @@
 {
   "description": "The whole fold differs between free and bound, under a TM-score ceiling of 0.75 measured on the confidently predicted fold",
-  "weights_induced_fit_global": 1.0,
+  "weights_fold_switching": 1.0,
   "weights_interface_contacts": 2.0,
   "induced_fit_tm_target": 0.6,
   "max_induced_fit_tm_final": 0.75,

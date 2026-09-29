@@ -294,7 +294,7 @@ The table lists every objective. Default weights describe the standard binder be
 | `weights_n_terminus_away` | off | Direct the N terminus away from the target. |
 | `weights_c_terminus_away` | off | Direct the C terminus away from the target. |
 | `weights_disulfide` | off | Charge for every cysteine left without a partner. The loss reads in free cysteines, so a weight of 1.0 prices one unpaired cysteine at 1.0. |
-| `weights_induced_fit_global` | off | Whole-fold difference between free and bound structures. |
+| `weights_fold_switching` | off | Whole-fold difference between free and bound structures. |
 | `weights_induced_fit_interface` | off | Movement of the binding surface relative to the binder core. |
 | `weights_fold_switching` | off | Difference between explicit conformation groups. |
 | `weights_collective_softness` | off | Favour a shared collective hinge motion over local floppiness. |
@@ -326,7 +326,7 @@ Shared selectors are `prediction_state` (which prepared target or `binder_alone`
 | `non_helical` | `cutoff=6.0` |
 | `termini_distance` | `threshold_distance=7.0` |
 | `disulfide` | `distance=3.8`, `sigma=1.5`, `sequence_separation=3`, `temperature=0.1` |
-| `induced_fit_global` | `tm_target=0.6` |
+| `fold_switching` | `tm_target=0.6` |
 | `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None` |
 | `fold_switching` | `binder_shapes=()`, `tm_target=0.6` |
 | `collective_softness` | `contact_decay=8.0`, `damping=0.01`, `power_iterations=12`, `eps=1e-08` |

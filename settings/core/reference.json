@@ -281,7 +281,6 @@
     "weights_exposed_termini": null,
     "weights_fold_switching": null,
     "weights_humanization": null,
-    "weights_induced_fit_global": null,
     "weights_induced_fit_interface": null,
     "weights_interface_contacts": 1.0,
     "weights_interface_pae": 0.1,

@@ -678,14 +678,6 @@ def confident_binder_comparison(predictions: StructurePredictions, prediction_st
     confidence = jnp.minimum(binder_state_confidence(predictions[prediction_state], chain), binder_state_confidence(predictions[reference_state], chain))
     return coordinates, reference_coordinates, valid_mask * jax.nn.relu(confidence - confidence_floor) / (1.0 - confidence_floor + 1e-08)
 
-@loss('induced_fit_global', target_weighting='every_target')
-def induced_fit_global_loss(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, chain: str='binder', tm_target: float=0.6, confidence_floor: float=0.7) -> Array:
-    prediction_state = resolve_prediction_state(predictions, prediction_state)
-    if prediction_state not in predictions or reference_state not in predictions:
-        return jnp.asarray(0.0)
-    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, chain, confidence_floor)
-    return jnp.square(jax.nn.relu(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask) - tm_target)) * (valid_mask.sum() >= 3)
-
 def binder_interface_mask(protein_states: ProteinStates, predictions: StructurePredictions, chain: str='binder', target: str='target', cutoff: float=8.0) -> Array:
     prediction_state = resolve_prediction_state(predictions, 'complex')
     protein_complex = predictions[prediction_state].protein_complex
@@ -717,7 +709,7 @@ def frozen_interface_arguments(losses: dict[str, DesignLoss], padded_chains: dic
     return {name: {'interface_mask': jnp.pad(interface_mask, [0, len(padded_chains[losses[name].function.keywords.get('chain', 'binder')]) - len(interface_mask)])} for name, interface_mask in frozen.items()}
 
 def induced_fit_hinge_names(losses: dict[str, DesignLoss]) -> tuple[str, ...]:
-    return tuple(name for name in losses if name.split('.')[0] in ('induced_fit_interface', 'induced_fit_global'))
+    return tuple(name for name in losses if name.split('.')[0] == 'induced_fit_interface')
 
 BINDER_ALONE_LOSS_NAMES = ('plddt_loss', 'binder_pae', 'compactness', 'binder_contacts', 'binder_helicity')
 PROTOMER_SCOPED_LOSSES = ('binder_pae', 'compactness', 'binder_contacts')
@@ -775,11 +767,13 @@ def induced_fit_interface_loss(protein_states: ProteinStates, predictions: Struc
     interface_rmsd = core_aligned_interface_rmsd(coordinates, reference_coordinates, interface_mask, alignment_mask)
     return jnp.square(jax.nn.relu(interface_rmsd_target - interface_rmsd)) * (interface_mask.sum() >= 3) * (alignment_mask.sum() >= 3)
 
-@loss('fold_switching')
-def fold_switching_loss(protein_states: ProteinStates, predictions: StructurePredictions, binder_shapes: tuple[tuple[str, ...], ...]=(), chain: str='binder', tm_target: float=0.6, confidence_floor: float=0.7) -> Array:
-    selected_states = [next((state for state in conformation_states if state in predictions), None) for conformation_states in binder_shapes]
-    active_conformation_states = [state for state in selected_states if state is not None]
-    return induced_fit_global_loss(protein_states, predictions, active_conformation_states[0], active_conformation_states[1], chain, tm_target, confidence_floor) if len(active_conformation_states) >= 2 else jnp.asarray(0.0)
+@loss('fold_switching', target_weighting='binds_target')
+def fold_switching_loss(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, chain: str='binder', tm_target: float=0.6, confidence_floor: float=0.7) -> Array:
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    if prediction_state not in predictions or reference_state not in predictions:
+        return jnp.asarray(0.0)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, chain, confidence_floor)
+    return jnp.square(jax.nn.relu(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask) - tm_target)) * (valid_mask.sum() >= 3)
 
 def elastic_network_covariance(coordinates: Array, residue_mask: Array, contact_decay: float, damping: float, eps: float=1e-08) -> Array:
     residue_count = coordinates.shape[0]
