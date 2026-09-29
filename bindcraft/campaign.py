@@ -102,6 +102,8 @@ def trajectory_length_bucket(design_settings, key: jax.Array, trajectory_number:
 
 def resolved_attention_route(design_settings, alphafold_model, key: jax.Array) -> str:
     protein_states, _multi_chain_binders, losses = initialize_design_trajectory(design_settings, jax.random.split(key)[0])
+    if any(not entry.required_states <= set(protein_states) for entry in losses.values()):
+        return alphafold_model.attention_backend
     alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True)
     return alphafold_model.last_attention_backend
 
