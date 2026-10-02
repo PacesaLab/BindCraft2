@@ -188,7 +188,7 @@ Detargeting only checks the off-targets supplied. Use `targets[].objective: "det
 
 ### Conformational design
 
-`induced_fit` requests movement of the binding surface; `fold_switch` requests a whole-fold difference between free and bound structures. Both presets require one target. `binder_shapes` instead specifies groups of states sharing a conformation, e.g. `[["hPDL1"],["binder_alone"]]`, used by `weights_fold_switching`. Structural differences do not establish switching kinetics or thermodynamic preference.
+`induced_fit` requests movement of the binding surface; `fold_switch` requests a whole-fold difference between free and bound structures. `induced_fit` requires exactly one target, because its binder-alone block freezes one bound structure; `fold_switch` carries no such restriction. `binder_shapes` instead specifies groups of states sharing a conformation, e.g. `[["hPDL1"],["binder_alone"]]`, used by `weights_fold_switching`. Structural differences do not establish switching kinetics or thermodynamic preference.
 
 | Setting | Default | Why change it |
 | --- | --- | --- |
@@ -294,9 +294,8 @@ The table lists every objective. Default weights describe the standard binder be
 | `weights_n_terminus_away` | off | Direct the N terminus away from the target. |
 | `weights_c_terminus_away` | off | Direct the C terminus away from the target. |
 | `weights_disulfide` | off | Charge for every cysteine left without a partner. The loss reads in free cysteines, so a weight of 1.0 prices one unpaired cysteine at 1.0. |
-| `weights_fold_switching` | off | Whole-fold difference between free and bound structures. |
+| `weights_fold_switching` | off | Whole-fold difference between the prediction state and its reference state: bound versus binder-alone by default, or the explicit conformation groups when `binder_shapes` names them. Measured on the confidently predicted fold. |
 | `weights_induced_fit_interface` | off | Movement of the binding surface relative to the binder core. |
-| `weights_fold_switching` | off | Difference between explicit conformation groups. |
 | `weights_collective_softness` | off | Favour a shared collective hinge motion over local floppiness. |
 | `weights_multidomain` | off | Separate, compact domains connected by a linker. |
 
@@ -326,9 +325,8 @@ Shared selectors are `prediction_state` (which prepared target or `binder_alone`
 | `non_helical` | `cutoff=6.0` |
 | `termini_distance` | `threshold_distance=7.0` |
 | `disulfide` | `distance=3.8`, `sigma=1.5`, `sequence_separation=3`, `temperature=0.1` |
-| `fold_switching` | `tm_target=0.6` |
-| `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None` |
-| `fold_switching` | `binder_shapes=()`, `tm_target=0.6` |
+| `fold_switching` | `tm_target=0.6`, `prediction_state='complex'`, `reference_state='binder_alone'`, `chain='binder'`, `confidence_floor=0.7` |
+| `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None`, `reference_state='binder_alone'`, `confidence_floor=0.7` |
 | `collective_softness` | `contact_decay=8.0`, `damping=0.01`, `power_iterations=12`, `eps=1e-08` |
 | `multidomain` | `domain_ids=()`, `n_domains=2`, `min_domain_size=50`, `max_domain_size=180`, `max_domains=2`, `seed=0`, `domain_rg_weight=0.3`, `domain_sep_weight=0.0`, `domain_contact_cutoff=8.0`, `domain_pae_margin=0.15`, `domain_linker_gap=0.1`, `domain_linker_sharpness=0.03`, `domain_linker_helix_weight=0.0` |
 

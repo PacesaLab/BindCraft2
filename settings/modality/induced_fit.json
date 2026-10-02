@@ -1,5 +1,5 @@
 {
-  "description": "The interface moves at least 2 angstroms between the free and bound prediction, measured on the confidently predicted fold",
+  "description": "The interface is optimised toward a 5 angstrom shift between the free and bound prediction and accepted above 2, both measured on the confidently predicted fold",
   "weights_induced_fit_interface": 0.224,
   "weights_interface_contacts": 2.0,
   "induced_fit_delta": 5.0,

@@ -10,15 +10,49 @@ The **modality** sets the binder format and the conformational objective. Name i
 | `binder` | A de novo miniprotein, ~60–180 residues, folded from nothing | The default and most reliable. General de novo binder against a structured epitope. | The general-purpose choice: research reagents and pulldowns, biosensors, crystallisation/cryo-EM fiducials, therapeutic-lead and targeting domains. Most reliable to fold and bind. |
 | `large_binder` | A longer de novo binder (~250–600 residues) with extended optimisation | Chiefly to add **mass to a small target for cryo-EM / structural biology**; also for large or flat epitopes that need more interface. **Name `binder_lengths`** (see `bigbang` in [Desperation and autotuning](05-desperation-and-autotuning.md) for large complexes). | Primarily a **structural-biology tool**: a rigid binder adds **mass and recognisable features to a small target for cryo-EM** (and can act as a crystallisation chaperone), making an otherwise too-small particle tractable. Secondarily, big or flat epitopes that need more buried area, higher-avidity single chains, and longer fusion/scaffolding domains. |
 | `peptide` | A 12–25 residue linear peptide, judged bound without a free fold | A short linear peptide into a **groove or pocket** — not a flat surface (see intuition below). | Inhibitors that thread a **groove or cleft** (protein–protein interfaces with a linear hotspot, active-site channels), tool compounds and targeting peptides. Poor on flat surfaces. |
-| `cyclic_peptide` | A 6–16 residue head-to-tail cyclic peptide | Cyclic peptide binders; the ring pre-pays part of the binding entropy. Read `Cyclic_Closure_Distance`. | Macrocycle-style binders wanting protease resistance and rigidity; the ring's lower entropy makes it a better peptide binder than a linear one of the same length. |
+| `cyclic_peptide` | A 6–20 residue head-to-tail cyclic peptide | Cyclic peptide binders; the ring pre-pays part of the binding entropy. Read `Cyclic_Closure_Distance`. | Macrocycle-style binders wanting protease resistance and rigidity; the ring's lower entropy makes it a better peptide binder than a linear one of the same length. |
 | `homo_oligomer` | Identical copies of one 40–120 residue chain (lengths are per copy) | A symmetric homo-oligomeric binder — and the natural choice for a **symmetric target** (e.g. homotrimeric TNFα) a single-chain binder struggles with. Set `copies`. | Symmetric, multivalent binders — avidity, receptor **clustering/agonism**, and self-assembling building blocks. Especially good for **symmetric targets** that a monomeric binder handles poorly (e.g. homotrimeric **TNFα**): a matched Cₙ oligomer can engage every protomer of the symmetric target at once. |
 | `multidomain` | Two domains on one 120–300 residue chain | A two-domain binder with separation/linker objectives. | Single-chain **biparatopic/bispecific** reach across two epitopes (or two targets), and larger, higher-avidity architectures. |
 | `VHH` | Single-domain antibody scaffold, editable CDRs; samples extended and folded-back CDR3 | Single-domain antibody (VHH) format (see conformation note below). | Single-domain antibodies for **concave/cryptic epitopes and enzyme active sites**, intrabodies, crystallisation chaperones, imaging, and modular fusion building blocks. |
 | `scFv` | Heavy + light variable domains as two chains, no linker designed | scFv-format binders. | Variable-fragment format for **CAR-T binding domains** and bispecific/multispecific building blocks — when the downstream construct needs an scFv specifically. Least stable of the antibody formats. |
 | `Fab` | Heavy + light chains, editable variable domains, constant body kept off the target | Fab-format binders. | The classic therapeutic/diagnostic antibody fragment: more stable and manufacturable than an scFv, and the base the scFv here is derived from. |
 | `ARP` | Ankyrin Repeat protein — a consensus ankyrin-repeat scaffold with editable repeat positions | Ankyrin-repeat (ARP) binders. | Ankyrin Repeat protein — non-antibody, disulfide-free, high-stability scaffold: cheap microbial production, intracellular use, and easy multivalent fusions. |
-| `induced_fit` | The interface moves ≥5 Å between the free and bound prediction | The binder should change shape on binding. | Binders for targets that **change shape on binding** (conformational selection), and allosteric or state-selective binders. |
-| `fold_switch` | The whole fold differs free vs bound (TM-score ≤ 0.6) | You explicitly want a fold-switching binder. | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
+| `induced_fit` | The interface is optimised toward a 5 Å shift free vs bound and accepted above 2 Å | The binder should change shape on binding. | Binders for targets that **change shape on binding** (conformational selection), and allosteric or state-selective binders. |
+| `fold_switch` | The whole fold differs free vs bound (TM-score ≤ 0.75) | You explicitly want a fold-switching binder. | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
+
+## Combining modalities — order matters
+
+Named modalities are applied as layers, **in the order you write them**, and a later layer wins any
+key it shares with an earlier one. One layer is added for you: `binder` is prepended **only when
+none** of the names you gave is a binder format. The binder formats are `binder`, `large_binder`,
+`peptide`, `cyclic_peptide`, `homo_oligomer`, `multidomain`, `VHH`, `scFv`, `Fab` and `ARP`.
+`induced_fit` and `fold_switch` are conformational objectives, not formats.
+
+**Name the format first and the conformational objective last.**
+
+| Written as | Layers applied | `Binder_RMSD` |
+| --- | --- | --- |
+| `"induced_fit"` | `binder`, `induced_fit` | off — correct |
+| `["binder", "induced_fit"]` | `binder`, `induced_fit` | off — correct |
+| `["induced_fit", "binder"]` | `induced_fit`, `binder` | **3.5 — wrong** |
+| `["large_binder", "fold_switch"]` | `large_binder`, `fold_switch` | off — correct |
+| `["fold_switch", "large_binder"]` | `fold_switch`, `large_binder` | **3.5 — wrong** |
+
+`induced_fit` and `fold_switch` set `Binder_RMSD` to `null` precisely to switch that gate off, because
+the gate measures the bound-versus-free displacement these objectives exist to create. Name a binder
+format that carries the gate after them and it comes back at 3.5 Å, so every design that achieves the
+objective is rejected by the filter: the campaign runs its full `max_trajectories` and finishes with
+no accepted designs and no error explaining why. Reversing the two names fixes it.
+
+Only `binder`, `homo_oligomer` and `large_binder` set this gate. The scaffold formats (`VHH`, `scFv`,
+`Fab`, `ARP`) and `peptide`, `cyclic_peptide` and `multidomain` do not define `Binder_RMSD` at all, so
+`["VHH", "induced_fit"]` and `["induced_fit", "VHH"]` both leave it off — but the last-wins rule below
+still applies to everything else those layers share.
+
+The same last-wins rule applies to everything else the layers share. Two scaffold formats cannot be
+combined — `["ARP", "VHH"]` takes VHH's `binder_scaffold` and `mutate_positions` and silently drops
+ARP's. `binder_lengths` likewise comes from whichever layer is named last, so pin it yourself when
+combining formats of different sizes.
 
 ## How to choose — biophysical intuition
 
