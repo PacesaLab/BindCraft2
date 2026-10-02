@@ -2,7 +2,7 @@
   "modality": "cyclic_peptide",
   "target": "hPDL1",
   "binder_lengths": [
-    6,
+    7,
     16
   ],
   "validation_model": "multimer",

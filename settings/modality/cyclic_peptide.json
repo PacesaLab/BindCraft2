@@ -3,7 +3,7 @@
   "validation_model": "multimer",
   "cyclize_peptide": true,
   "binder_lengths": [
-    6,
+    7,
     16
   ],
   "aa_bias": {
