@@ -1,4 +1,5 @@
 {
+  "modality": "ARP",
   "target": "hPDL1",
   "binder_scaffold": "../scaffolds/ARP.cif",
   "mutate_positions": "A16,A19,A20,A23,A44-48(5-10),A53,A56,A77-81(5-10),A86,A89,A110-114(5-10),A119,A122,A143-147(5-10),A152,A156",

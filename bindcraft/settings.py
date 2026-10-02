@@ -379,7 +379,7 @@ def requested_preset_names(request: dict, tier: str, presets: Path=CAMPAIGN_PRES
     if tier == 'modality':
         named = request.get('modality') or ()
         named = (named,) if isinstance(named, str) else tuple(named)
-        return named if not named or any(name in BINDER_FORMATS for name in named) else ('binder', *named)
+        return named if named and any(name in BINDER_FORMATS for name in named) else ('binder', *named)
     return tuple(name for name in shipped_preset_names(tier, presets) if request.get(name))
 
 def preset_tier_layers(request: dict, tier: str, presets: Path=CAMPAIGN_PRESETS) -> list[dict]:
