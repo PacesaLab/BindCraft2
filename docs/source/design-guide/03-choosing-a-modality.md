@@ -20,39 +20,47 @@ The **modality** sets the binder format and the conformational objective. Name i
 | `induced_fit` | The interface is optimised toward a 5 Å shift free vs bound and accepted above 2 Å | The binder should change shape on binding. | Binders for targets that **change shape on binding** (conformational selection), and allosteric or state-selective binders. |
 | `fold_switch` | The whole fold differs free vs bound (TM-score ≤ 0.75) | You explicitly want a fold-switching binder. | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
 
-## Combining modalities — order matters
+## Combining modalities
 
-Named modalities are applied as layers, **in the order you write them**, and a later layer wins any
-key it shares with an earlier one. One layer is added for you: `binder` is prepended **only when
-none** of the names you gave is a binder format. The binder formats are `binder`, `large_binder`,
-`peptide`, `cyclic_peptide`, `homo_oligomer`, `multidomain`, `VHH`, `scFv`, `Fab` and `ARP`.
-`induced_fit` and `fold_switch` are conformational objectives, not formats.
+A modality is either a **binder format** — `binder`, `large_binder`, `peptide`, `cyclic_peptide`,
+`homo_oligomer`, `multidomain`, `VHH`, `scFv`, `Fab`, `ARP` — or a **conformational objective**,
+`induced_fit` or `fold_switch`. A campaign takes one format and, optionally, one objective.
 
-**Name the format first and the conformational objective last.**
+**You can write them in either order.** Formats are always applied before objectives, and `binder`
+is supplied when you name no format at all. So `["fold_switch", "binder"]` and
+`["binder", "fold_switch"]` resolve identically, and an objective can never overwrite the format
+it is qualifying.
 
-| Written as | Layers applied | `Binder_RMSD` |
-| --- | --- | --- |
-| `"induced_fit"` | `binder`, `induced_fit` | off — correct |
-| `["binder", "induced_fit"]` | `binder`, `induced_fit` | off — correct |
-| `["induced_fit", "binder"]` | `induced_fit`, `binder` | **3.5 — wrong** |
-| `["large_binder", "fold_switch"]` | `large_binder`, `fold_switch` | off — correct |
-| `["fold_switch", "large_binder"]` | `fold_switch`, `large_binder` | **3.5 — wrong** |
+> This was not true before 1.0.4. The order was taken literally, and naming a format *after*
+> `induced_fit` or `fold_switch` put the `Binder_RMSD` gate back at 3.5 Å — the gate those
+> objectives switch off, because it measures the very displacement they exist to create. Every
+> design that met the objective was then rejected by the filter, and the campaign finished with
+> nothing accepted and no error. Both orders are now the correct one.
 
-`induced_fit` and `fold_switch` set `Binder_RMSD` to `null` precisely to switch that gate off, because
-the gate measures the bound-versus-free displacement these objectives exist to create. Name a binder
-format that carries the gate after them and it comes back at 3.5 Å, so every design that achieves the
-objective is rejected by the filter: the campaign runs its full `max_trajectories` and finishes with
-no accepted designs and no error explaining why. Reversing the two names fixes it.
+### Not every pair is supported
 
-Only `binder`, `homo_oligomer` and `large_binder` set this gate. The scaffold formats (`VHH`, `scFv`,
-`Fab`, `ARP`) and `peptide`, `cyclic_peptide` and `multidomain` do not define `Binder_RMSD` at all, so
-`["VHH", "induced_fit"]` and `["induced_fit", "VHH"]` both leave it off — but the last-wins rule below
-still applies to everything else those layers share.
+These combinations are refused when the campaign starts, rather than silently producing something
+you did not ask for:
 
-The same last-wins rule applies to everything else the layers share. Two scaffold formats cannot be
-combined — `["ARP", "VHH"]` takes VHH's `binder_scaffold` and `mutate_positions` and silently drops
-ARP's. `binder_lengths` likewise comes from whichever layer is named last, so pin it yourself when
-combining formats of different sizes.
+| | cannot combine with |
+| --- | --- |
+| fold conditioning (`VHH`, `scFv`, `Fab`, `ARP`) | `cyclic_peptide`, `homo_oligomer`, `fold_switch`, mixed topology |
+| `homo_oligomer` | `multidomain` |
+| `induced_fit` | multitargeting, detargeting |
+| disordered (sequence) target | focused epitope, coldspot avoidance |
+
+Two scaffolds together — `["ARP", "VHH"]` — are refused for the same reason: each brings its own
+framework and a campaign designs one binder.
+
+A framework fixes the fold, which is why fold conditioning cannot also switch fold, close into a
+macrocycle or be told to change its secondary structure. `induced_fit` freezes one bound structure
+to compare a free state against, so it designs against exactly one target.
+
+### What still depends on order
+
+Among formats of the same kind, a later layer wins any key it shares with an earlier one, so
+`binder_lengths` comes from whichever you name last. Pin it yourself when combining formats of
+different sizes.
 
 ## How to choose — biophysical intuition
 

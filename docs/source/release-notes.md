@@ -69,23 +69,31 @@ Shipped examples now name their own modality rather than relying on a `--modalit
 an example gives the same result whether or not you pass one. `pdl1_arp.json` now names `ARP`,
 which means it finally gets the aromatic downweighting its description has always promised.
 
-### Modality order is load-bearing
+### Modality order no longer changes the result
 
-Because modality now lives in the campaign file, it is easier to combine several — and the order
-you write them in decides the outcome. Layers apply left to right and **the last one wins**.
-
-The case that bites: `induced_fit` and `fold_switch` switch the `Binder_RMSD` gate *off*, because
-that gate measures exactly the motion they exist to create. Name `binder`, `homo_oligomer` or
-`large_binder` *after* them and the gate comes back at 3.5 Å — so every design that achieves the
-objective is rejected, and the campaign ends with no accepted designs and no error saying why.
+Modalities were applied strictly in the order written, last one wins. That made the order
+load-bearing in a way nothing documented: `induced_fit` and `fold_switch` switch the `Binder_RMSD`
+gate *off*, because it measures exactly the displacement they exist to create. Naming `binder`,
+`homo_oligomer` or `large_binder` **after** them put the gate back at 3.5 Å, so every design that
+achieved the objective was rejected by the filter — the campaign burned its full `max_trajectories`
+and finished with nothing accepted and no error.
 
 ```json
-"modality": ["binder", "fold_switch"]    // correct — gate off
-"modality": ["fold_switch", "binder"]    // wrong  — gate back on, zero designs
+"modality": ["fold_switch", "binder"]    // before 1.0.4: gate back on, zero designs
 ```
 
-Write the binder format first and the conformational objective last. See
-[Choosing a modality](design-guide/03-choosing-a-modality.md) for the full rules.
+Binder formats are now always applied before conformational objectives, whichever order you write,
+so both spellings resolve identically and an objective can never overwrite the format it qualifies.
+Ordering among formats of the same kind is unchanged — `binder_lengths` still comes from whichever
+you name last.
+
+### Unsupported combinations are refused at campaign start
+
+Combinations that cannot mean anything coherent now stop the campaign instead of silently producing
+something else. Naming two scaffolds — `["ARP", "VHH"]` — is one: each brings its own framework and
+a campaign designs one binder, so the last named used to win and the rest were dropped without a
+word. The full compatibility table is in
+[Choosing a modality](design-guide/03-choosing-a-modality.md).
 
 ### Cyclic peptides default to 6–20 residues
 

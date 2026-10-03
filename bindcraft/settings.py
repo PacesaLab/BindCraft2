@@ -379,8 +379,13 @@ def requested_preset_names(request: dict, tier: str, presets: Path=CAMPAIGN_PRES
     if tier == 'modality':
         named = request.get('modality') or ()
         named = (named,) if isinstance(named, str) else tuple(named)
-        return named if named and any(name in BINDER_FORMATS for name in named) else ('binder', *named)
+        formats = tuple(name for name in named if name in BINDER_FORMATS) or ('binder',)
+        return formats + tuple(name for name in named if name not in BINDER_FORMATS)
     return tuple(name for name in shipped_preset_names(tier, presets) if request.get(name))
+
+def scaffolded_modality_names(request: dict, presets: Path=CAMPAIGN_PRESETS) -> tuple[str, ...]:
+    """The named modalities that each bring their own framework. A campaign designs one."""
+    return tuple(name for name in requested_preset_names(request, 'modality', presets) if read_preset('modality', name, presets).get('binder_scaffold'))
 
 def preset_tier_layers(request: dict, tier: str, presets: Path=CAMPAIGN_PRESETS) -> list[dict]:
     layers = [read_preset(tier, name, presets) for name in requested_preset_names(request, tier, presets)]
