@@ -4,7 +4,7 @@ import subprocess
 import sys
 import threading
 import time
-import platform
+import tempfile
 from pathlib import Path
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
