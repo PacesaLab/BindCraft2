@@ -19,9 +19,6 @@ MAXIMUM_WORKERS_PER_GPU = 8
 AUTOMATIC_WORKERS_PER_GPU = 7
 TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
 
-def run_tag() -> str:
-    return os.environ.get('BINDCRAFT_RUN_TAG') or f'{platform.node()}-{os.getpid()}'
-
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
 
@@ -217,7 +214,7 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
                 environment['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(worker['memory_fraction'])
             if worker.get('lengths'):
                 environment['BINDCRAFT_BINDER_LENGTHS'] = ','.join(str(length) for length in worker['lengths'])
-            log_file = open(os.path.join(log_directory, f'{run_tag()}_worker_{worker_index:02d}_gpu_{worker["gpu"]}.log'), 'a', buffering=1)
+            log_file = open(os.path.join(log_directory, f'{os.getpid()}_worker_{worker_index:02d}_gpu_{worker["gpu"]}.log'), 'a', buffering=1)
             log_files.append(log_file)
             process = subprocess.Popen(worker_command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             processes.append(process)
