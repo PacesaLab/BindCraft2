@@ -706,6 +706,10 @@ def read_campaign_metadata(path: str | Path | None) -> dict[str, str]:
 
 def read_settings(path: str | Path, overrides: dict | None=None) -> dict:
     settings_path = Path(path).resolve()
+    try:
+        request = json.loads(settings_path.read_text())
+    except json.JSONDecodeError as unreadable:
+        raise ValueError(f'{settings_path} is not readable JSON: {unreadable}') from unreadable
     request = json.loads(settings_path.read_text())
     for target in request.get('targets', []):
         target['target_path'] = str((settings_path.parent / target['target_path']).resolve())
