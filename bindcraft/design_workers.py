@@ -19,6 +19,9 @@ MAXIMUM_WORKERS_PER_GPU = 8
 AUTOMATIC_WORKERS_PER_GPU = 7
 TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
 
+def run_tag() -> str:
+    return os.environ.get('BINDCRAFT_RUN_TAG') or f'{platform.node()}-{os.getpid()}'
+
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
 
