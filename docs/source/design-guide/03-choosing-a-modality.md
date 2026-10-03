@@ -47,6 +47,8 @@ you did not ask for:
 | fold conditioning (`VHH`, `scFv`, `Fab`, `ARP`) | `cyclic_peptide`, `homo_oligomer`, `fold_switch`, mixed topology |
 | `homo_oligomer` | `multidomain` |
 | `induced_fit` | multitargeting, detargeting |
+| `peptide` | `cyclic_peptide`, `large_binder`, `multidomain` |
+| `cyclic_peptide` | `large_binder`, `multidomain` |
 | disordered (sequence) target | focused epitope, coldspot avoidance |
 
 Two scaffolds together — `["ARP", "VHH"]` — are refused for the same reason: each brings its own
@@ -56,11 +58,24 @@ A framework fixes the fold, which is why fold conditioning cannot also switch fo
 macrocycle or be told to change its secondary structure. `induced_fit` freezes one bound structure
 to compare a free state against, so it designs against exactly one target.
 
-### What still depends on order
+### When two formats share a setting
 
-Among formats of the same kind, a later layer wins any key it shares with an earlier one, so
-`binder_lengths` comes from whichever you name last. Pin it yourself when combining formats of
-different sizes.
+Order never decides the outcome. Where two named formats set the same thing, the one **higher up**
+this list wins, whichever way round you wrote them:
+
+1. **framework** — `ARP`, `Fab`, `scFv`, `VHH` — the scaffold fixes the chain it is built on
+2. **chain kind** — `peptide`, `cyclic_peptide`, `large_binder` — sets its own size
+3. **assembly** — `homo_oligomer`, `multidomain` — says how many copies or domains, not how long
+4. **`binder`** — the fallback, which yields to anything else named
+
+So `["homo_oligomer", "peptide"]` designs 12–25 residues per copy, because the chain kind owns the
+length and the assembly owns the count. `["VHH", "large_binder"]` keeps the VHH framework's
+`min_monomer_plddt_final` of 0.7. And naming `binder` alongside anything else changes nothing,
+because `binder` always yields.
+
+One setting is exempt: `multidomain` owns `weights_binder_contacts`, which it sets to zero on
+purpose — domains pulled together are not separate domains. `["large_binder", "multidomain"]`
+therefore takes `large_binder`'s lengths and weights but `multidomain`'s contact weight.
 
 ## How to choose — biophysical intuition
 

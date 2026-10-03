@@ -380,15 +380,46 @@ def requested_preset_names(request: dict, tier: str, presets: Path=CAMPAIGN_PRES
         named = request.get('modality') or ()
         named = (named,) if isinstance(named, str) else tuple(named)
         formats = tuple(name for name in named if name in BINDER_FORMATS) or ('binder',)
-        return formats + tuple(name for name in named if name not in BINDER_FORMATS)
+        return tuple(sorted(formats, key=lambda name: MODALITY_PRECEDENCE.get(name, 0))) + tuple(name for name in named if name not in BINDER_FORMATS)
     return tuple(name for name in shipped_preset_names(tier, presets) if request.get(name))
 
 def scaffolded_modality_names(request: dict, presets: Path=CAMPAIGN_PRESETS) -> tuple[str, ...]:
     """The named modalities that each bring their own framework. A campaign designs one."""
     return tuple(name for name in requested_preset_names(request, 'modality', presets) if read_preset('modality', name, presets).get('binder_scaffold'))
 
+#A later layer wins the settings it shares with an earlier one, so the presets are folded in
+#ascending precedence: a framework fixes the chain it is built on, a chain kind sets its own size,
+#an assembly says how many copies or domains rather than how long, and binder is the fallback that
+#yields to whatever else was named. Conformational objectives are folded after every format,
+#because the gates they stand down are the ones the formats install.
+MODALITY_PRECEDENCE = {'binder': 1, 'homo_oligomer': 2, 'multidomain': 2, 'peptide': 3, 'cyclic_peptide': 3, 'large_binder': 3, 'ARP': 4, 'Fab': 4, 'scFv': 4, 'VHH': 4}
+
+#One setting does not follow that order: multidomain zeroes the binder-contact weight on purpose,
+#because domains that are pulled together are not separate domains.
+MODALITY_SETTING_OWNERS = {'weights_binder_contacts': 'multidomain'}
+
+#Pairs that name two different things for one chain to be. Each is refused rather than resolved.
+INCOMPATIBLE_MODALITIES = (('cyclic_peptide', 'large_binder', 'a macrocycle of 6-20 residues is not a 250-600 residue binder'),
+                           ('cyclic_peptide', 'multidomain', 'a macrocycle of 6-20 residues has no room for two domains'),
+                           ('cyclic_peptide', 'peptide', 'a peptide is either closed head to tail or it is linear'),
+                           ('large_binder', 'peptide', 'a peptide of 12-25 residues is not a 250-600 residue binder'),
+                           ('multidomain', 'peptide', 'a peptide of 12-25 residues has no room for two domains'))
+
+def incompatible_modality_names(request: dict, presets: Path=CAMPAIGN_PRESETS) -> tuple[tuple[str, str, str], ...]:
+    named = set(requested_preset_names(request, 'modality', presets))
+    scaffolded = scaffolded_modality_names(request, presets)
+    refused = [(first, second, reason) for first, second, reason in INCOMPATIBLE_MODALITIES if first in named and second in named]
+    if len(scaffolded) > 1:
+        refused.append((scaffolded[0], scaffolded[1], 'each brings its own framework, and a campaign designs one binder'))
+    return tuple(sorted(refused))
+
+def modality_owner_layer(names: tuple[str, ...], presets: Path=CAMPAIGN_PRESETS) -> list[dict]:
+    owned = {setting: read_preset('modality', owner, presets)[setting] for setting, owner in MODALITY_SETTING_OWNERS.items() if owner in names and any(name != owner and setting in read_preset('modality', name, presets) for name in names)}
+    return [owned] if owned else []
+
 def preset_tier_layers(request: dict, tier: str, presets: Path=CAMPAIGN_PRESETS) -> list[dict]:
-    layers = [read_preset(tier, name, presets) for name in requested_preset_names(request, tier, presets)]
+    names = requested_preset_names(request, tier, presets)
+    layers = [read_preset(tier, name, presets) for name in names] + (modality_owner_layer(names, presets) if tier == 'modality' else [])
     accumulated = [target for layer in layers for target in layer.pop('targets', [])]
     return layers + [{'targets': accumulated}] if accumulated else layers
 

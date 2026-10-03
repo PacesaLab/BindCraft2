@@ -84,15 +84,21 @@ and finished with nothing accepted and no error.
 
 Binder formats are now always applied before conformational objectives, whichever order you write,
 so both spellings resolve identically and an objective can never overwrite the format it qualifies.
-Ordering among formats of the same kind is unchanged — `binder_lengths` still comes from whichever
-you name last.
+
+Order no longer decides anything between two formats either. Where both set the same thing, the
+winner is fixed: a **framework** (`ARP`, `Fab`, `scFv`, `VHH`) beats a **chain kind** (`peptide`,
+`cyclic_peptide`, `large_binder`), which beats an **assembly** (`homo_oligomer`, `multidomain`),
+which beats **`binder`** — the fallback, which now yields to anything else named. So
+`["homo_oligomer", "peptide"]` designs 12–25 residues per copy whichever way round it is written.
+`multidomain` is exempt for one setting, `weights_binder_contacts`, which it zeroes deliberately.
 
 ### Unsupported combinations are refused at campaign start
 
-Combinations that cannot mean anything coherent now stop the campaign instead of silently producing
-something else. Naming two scaffolds — `["ARP", "VHH"]` — is one: each brings its own framework and
-a campaign designs one binder, so the last named used to win and the rest were dropped without a
-word. The full compatibility table is in
+Combinations that cannot mean anything coherent now stop the campaign instead of silently resolving
+to whichever was written last. Two scaffolds — `["ARP", "VHH"]` — are refused, because each brings
+its own framework and a campaign designs one binder. So are the pairs that name two different
+things for one chain to be: `peptide` with `cyclic_peptide`, `large_binder` or `multidomain`, and
+`cyclic_peptide` with `large_binder` or `multidomain`. The full compatibility table is in
 [Choosing a modality](design-guide/03-choosing-a-modality.md).
 
 ### Cyclic peptides default to 6–20 residues

@@ -7,7 +7,7 @@ from bindcraft.loss import build_losses, induced_fit_hinge_names
 from bindcraft.protein import ResidueFlags, listed_offending_residues, partly_trimmed_residues, scaffold_edit_flags
 from bindcraft.protein_preparation import prepare_binder_chains, prepare_targets
 from bindcraft.model_weights import alphafold_parameter_file, mpnn_variant_directory
-from bindcraft.settings import DESIGN_STAGE_NAMES, DEFAULT_VALIDATION_MODEL_COUNT, BinderDesignSettings, PredictionModelSelection, build_design_settings, conflicting_campaign_features, detarget_state_names, scaffolded_modality_names, is_fasta, merged_gradient_sequence_updates, named_prediction_models, select_design_and_validation_models, validates_on_multimer
+from bindcraft.settings import DESIGN_STAGE_NAMES, DEFAULT_VALIDATION_MODEL_COUNT, BinderDesignSettings, PredictionModelSelection, build_design_settings, conflicting_campaign_features, detarget_state_names, incompatible_modality_names, is_fasta, merged_gradient_sequence_updates, named_prediction_models, select_design_and_validation_models, validates_on_multimer
 
 CAMPAIGN_OUTPUT_NAMES = (*DESIGN_STAGES, '.campaign_state.json', 'trajectories.csv', 'candidates.csv', 'accepted.csv', 'trajectories', 'accepted')
 
@@ -115,13 +115,10 @@ def induced_fit_problems(design_settings: BinderDesignSettings) -> list[str]:
 def feature_conflict_problems(design_settings: BinderDesignSettings) -> list[str]:
     return [f'{first} and {second} cannot both hold: {reason}' for first, second, reason in conflicting_campaign_features(design_settings.settings)]
 
-def scaffold_conflict_problems(design_settings: BinderDesignSettings) -> list[str]:
-    scaffolded = scaffolded_modality_names(design_settings.settings)
-    if len(scaffolded) < 2:
-        return []
-    return [f"{' and '.join(scaffolded)} each bring their own framework, and a campaign designs one binder: the last named would win and the rest would be dropped without a word. Keep one"]
+def modality_conflict_problems(design_settings: BinderDesignSettings) -> list[str]:
+    return [f'modality {first} and modality {second} cannot both hold: {reason}. Name one' for first, second, reason in incompatible_modality_names(design_settings.settings)]
 
-FEATURE_VALIDATORS = (paratope_declaration_problems, target_rotation_problems, induced_fit_problems, feature_conflict_problems, scaffold_conflict_problems)
+FEATURE_VALIDATORS = (paratope_declaration_problems, target_rotation_problems, induced_fit_problems, feature_conflict_problems, modality_conflict_problems)
 
 def feature_problems(design_settings: BinderDesignSettings) -> list[str]:
     return [problem for validate in FEATURE_VALIDATORS for problem in validate(design_settings)]
