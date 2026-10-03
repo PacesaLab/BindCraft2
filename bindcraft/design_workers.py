@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import platform
 from pathlib import Path
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
@@ -246,8 +247,9 @@ def dispatch_design_workers(settings: dict, log_directory: str, residue_count: i
     if worker_command is None:
         os.makedirs(log_directory, exist_ok=True)
         worker_settings_path = os.path.join(log_directory, 'campaign_settings.json')
-        partial_path = f'{worker_settings_path}.{os.getpid()}.partial'
-        Path(partial_path).write_text(json.dumps(json_compatible(settings), sort_keys=True))
+        handle, partial_path = tempfile.mkstemp(dir=log_directory, prefix='campaign_settings.', suffix='.partial')
+        with os.fdopen(handle, 'w') as settings_file:
+            settings_file.write(json.dumps(json_compatible(settings), sort_keys=True))
         os.replace(partial_path, worker_settings_path)
         worker_command = [sys.executable, '-u', '-m', 'bindcraft.cli', 'design', worker_settings_path, *worker_arguments]
     memory_note = f' at {estimate_design_memory_gb(residue_count):.1f} GB each' if residue_count and (not any(worker.get('lengths') for worker in plan)) else ''
