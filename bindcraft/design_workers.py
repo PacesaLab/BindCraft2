@@ -246,7 +246,9 @@ def dispatch_design_workers(settings: dict, log_directory: str, residue_count: i
     if worker_command is None:
         os.makedirs(log_directory, exist_ok=True)
         worker_settings_path = os.path.join(log_directory, 'campaign_settings.json')
-        Path(worker_settings_path).write_text(json.dumps(json_compatible(settings), sort_keys=True))
+        partial_path = f'{worker_settings_path}.{os.getpid()}.partial'
+        Path(partial_path).write_text(json.dumps(json_compatible(settings), sort_keys=True))
+        os.replace(partial_path, worker_settings_path)
         worker_command = [sys.executable, '-u', '-m', 'bindcraft.cli', 'design', worker_settings_path, *worker_arguments]
     memory_note = f' at {estimate_design_memory_gb(residue_count):.1f} GB each' if residue_count and (not any(worker.get('lengths') for worker in plan)) else ''
     print(f"campaign fan-out: {len(plan)} design workers on GPUs {','.join(worker['gpu'] for worker in plan)}{memory_note}", flush=True)
