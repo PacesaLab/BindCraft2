@@ -6,6 +6,7 @@ import json
 import csv
 import math
 import os
+import platform
 import shutil
 import statistics
 import subprocess
@@ -160,9 +161,14 @@ class CampaignProgress:
     @contextmanager
     def locked_progress(self):
         with locked_campaign_folder(self.state_path):
-            state = json.loads(Path(self.state_path).read_text()) if os.path.exists(self.state_path) else self.recovered_state()
+            try:
+                state = json.loads(Path(self.state_path).read_text())
+            except (OSError, ValueError) as unreadable:
+                if os.path.exists(self.state_path):
+                    print(f'campaign state rebuilt from the recorded tables: {self.state_path} was not readable ({unreadable})', flush=True)
+                state = self.recovered_state()
             yield state
-            partial_path = f'{self.state_path}.partial'
+            partial_path = f'{self.state_path}.{platform.node()}.{os.getpid()}.partial'
             Path(partial_path).write_text(json.dumps(state, sort_keys=True))
             os.replace(partial_path, self.state_path)
 

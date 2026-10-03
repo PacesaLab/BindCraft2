@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import tempfile
 from pathlib import Path
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
@@ -213,7 +214,7 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
                 environment['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(worker['memory_fraction'])
             if worker.get('lengths'):
                 environment['BINDCRAFT_BINDER_LENGTHS'] = ','.join(str(length) for length in worker['lengths'])
-            log_file = open(os.path.join(log_directory, f'worker_{worker_index:02d}_gpu_{worker["gpu"]}.log'), 'a', buffering=1)
+            log_file = open(os.path.join(log_directory, f'{os.getpid()}_worker_{worker_index:02d}_gpu_{worker["gpu"]}.log'), 'a', buffering=1)
             log_files.append(log_file)
             process = subprocess.Popen(worker_command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             processes.append(process)
@@ -246,7 +247,10 @@ def dispatch_design_workers(settings: dict, log_directory: str, residue_count: i
     if worker_command is None:
         os.makedirs(log_directory, exist_ok=True)
         worker_settings_path = os.path.join(log_directory, 'campaign_settings.json')
-        Path(worker_settings_path).write_text(json.dumps(json_compatible(settings), sort_keys=True))
+        handle, partial_path = tempfile.mkstemp(dir=log_directory, prefix='campaign_settings.', suffix='.partial')
+        with os.fdopen(handle, 'w') as settings_file:
+            settings_file.write(json.dumps(json_compatible(settings), sort_keys=True))
+        os.replace(partial_path, worker_settings_path)
         worker_command = [sys.executable, '-u', '-m', 'bindcraft.cli', 'design', worker_settings_path, *worker_arguments]
     memory_note = f' at {estimate_design_memory_gb(residue_count):.1f} GB each' if residue_count and (not any(worker.get('lengths') for worker in plan)) else ''
     print(f"campaign fan-out: {len(plan)} design workers on GPUs {','.join(worker['gpu'] for worker in plan)}{memory_note}", flush=True)
