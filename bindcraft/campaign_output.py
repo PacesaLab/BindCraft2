@@ -163,7 +163,7 @@ class CampaignProgress:
         with locked_campaign_folder(self.state_path):
             try:
                 state = json.loads(Path(self.state_path).read_text())
-            except (OSError, ValueError):
+            except (OSError, ValueError) as unreadable:
                 if os.path.exists(self.state_path):
                     print(f'campaign state rebuilt from the recorded tables: {self.state_path} was not readable ({unreadable})', flush=True)
                 state = self.recovered_state()
