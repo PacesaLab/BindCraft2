@@ -1,5 +1,4 @@
 import math
-import os
 import jax
 from typing import Callable, NamedTuple
 from jax import Array
