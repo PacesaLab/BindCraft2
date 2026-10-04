@@ -156,7 +156,7 @@ class CampaignProgress:
         os.makedirs(project_folder, exist_ok=True)
 
     def recovered_state(self) -> dict:
-        return {'trajectories': csv_row_count(stage_table(self.project_folder, TRAJECTORY_STAGE)), 'accepted': csv_row_count(accepted_table(self.project_folder)), 'rejections': recorded_rejections(self.project_folder), 'attempted': sorted(designed_recipe_hashes(self.project_folder))}
+        return {'trajectories': csv_row_count(stage_table(self.project_folder, TRAJECTORY_STAGE)), 'accepted': csv_row_count(accepted_table(self.project_folder)), 'rejections': recorded_rejections(self.project_folder)}
 
     @contextmanager
     def locked_progress(self):
@@ -180,14 +180,6 @@ class CampaignProgress:
                 return None
             state['trajectories'] += 1
             return state['trajectories'], state['accepted']
-
-    def claim_recipe(self, identity: str) -> bool:
-        with self.locked_progress() as state:
-            attempted = state.setdefault('attempted', sorted(designed_recipe_hashes(self.project_folder)))
-            if identity in attempted:
-                return False
-            attempted.append(identity)
-            return True
 
     def record_accepted_design(self) -> int:
         with self.locked_progress() as state:
@@ -214,9 +206,6 @@ class CampaignProgress:
             rejections['candidates_rejected'] += 1 if failed_filters else 0
             for name in failed_filters:
                 rejections['failed_filters'][name] = rejections['failed_filters'].get(name, 0) + 1
-
-def designed_recipe_hashes(project_folder: str) -> set[str]:
-    return {row['hash'] for row in read_metric_rows(stage_table(project_folder, TRAJECTORY_STAGE)) if row.get('hash')}
 
 def redesigned_binder_sequences(project_folder: str) -> set[str]:
     return {row['Binder_Sequence'].replace('/', '') for path in (stage_table(project_folder, REFOLD_STAGE), accepted_table(project_folder))
