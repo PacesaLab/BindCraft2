@@ -44,11 +44,16 @@ def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
 
 def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
     try:
-        listing = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
+        listing = subprocess.run(['nvidia-smi', '--query-gpu=index,uuid,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return {}
-    fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    return {index: (float(free_mib) / 1024, float(total_mib) / 1024) for index, free_mib, total_mib in fields}
+    memory = {}
+    for index, uuid, free_mib, total_mib in [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]:
+        try:
+            memory[index] = memory[uuid] = (float(free_mib) / 1024, float(total_mib) / 1024)
+        except ValueError:
+            continue
+    return memory
 
 def estimate_design_memory_gb(residue_count: int) -> float:
     return DESIGN_MEMORY_SAFETY_FACTOR * (DESIGN_MODEL_RESIDENT_GB + DESIGN_ACTIVATION_BYTES_PER_RESIDUE_PAIR * int(residue_count) ** 2 / 1e9)
