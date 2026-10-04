@@ -7,6 +7,7 @@
   "attention_backend": "auto",
   "use_cueq": false,
   "subbatch_size": "auto",
+  "reproducible_gradients": false,
   "trajectory_only": false,
   "resume": true,
   "hash_design_names": true,
