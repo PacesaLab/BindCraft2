@@ -48,8 +48,9 @@ def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
     except (OSError, subprocess.CalledProcessError):
         return {}
     memory = {}
-    for index, uuid, free_mib, total_mib in [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]:
+    for row in [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]:
         try:
+            index, uuid, free_mib, total_mib = row
             memory[index] = memory[uuid] = (float(free_mib) / 1024, float(total_mib) / 1024)
         except ValueError:
             continue
@@ -230,11 +231,10 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
         exit_codes = [process.wait() for process in processes]
         for relay in relays:
             relay.join()
+        report_campaign_close(project_folders, requested_designs, max_trajectories)
         failed = [(index, code) for index, code in enumerate(exit_codes) if code]
         if failed:
             print('\n' + '\n'.join(f'worker={index} exited {code}' + (f' (killed by signal {-code})' if code < 0 else '') + f', see {log_directory}/*_worker_{index:02d}_*.log' for index, code in failed), flush=True)
-        else:
-            report_campaign_close(project_folders, requested_designs, max_trajectories)
         return next((code for code in exit_codes if code), 0)
     finally:
         for process in processes:
