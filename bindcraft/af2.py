@@ -2,6 +2,9 @@ import copy
 import fcntl
 import hashlib
 import os
+import platform
+import threading
+import time
 from contextlib import contextmanager
 from typing import Callable
 import jax
@@ -15,17 +18,52 @@ from bindcraft.loss import DesignLoss, frozen_interface_arguments, renamed_loss_
 from bindcraft.sequence_optimization import sequence_features_from_logits
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
 
+
+COMPILE_LOCK_HEARTBEAT_SECONDS = 30.0
+COMPILE_LOCK_STALE_SECONDS = 120.0
+
 @contextmanager
-def one_worker_compiles(compile_shape: tuple):
+def one_worker_compiles(compile_shape: tuple, blocking: bool=True):
     cache_directory = os.environ.get('JAX_COMPILATION_CACHE_DIR')
     if not cache_directory:
-        yield
+        yield True
         return
     os.makedirs(cache_directory, exist_ok=True)
     shape_digest = hashlib.sha256(repr(compile_shape).encode()).hexdigest()[:16]
-    with open(os.path.join(cache_directory, f'compile_{shape_digest}.lock'), 'w') as compile_lock:
-        fcntl.flock(compile_lock, fcntl.LOCK_EX)
-        yield
+    lock_path = os.path.join(cache_directory, f'compile_{shape_digest}.lock')
+    while True:
+        try:
+            lock_handle = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            if not blocking:
+                yield False
+                return
+            time.sleep(1.0)
+            try:
+                if time.time() - os.path.getmtime(lock_path) > COMPILE_LOCK_STALE_SECONDS:
+                    os.unlink(lock_path)
+            except FileNotFoundError:
+                pass
+    os.write(lock_handle, f'{platform.node()} {os.getpid()}\n'.encode())
+    finished = threading.Event()
+    def keep_the_lock_alive() -> None:
+        while not finished.wait(COMPILE_LOCK_HEARTBEAT_SECONDS):
+            try:
+                os.utime(lock_path, None)
+            except FileNotFoundError:
+                return
+    heartbeat = threading.Thread(target=keep_the_lock_alive, daemon=True)
+    heartbeat.start()
+    try:
+        yield True
+    finally:
+        finished.set()
+        os.close(lock_handle)
+        try:
+            os.unlink(lock_path)
+        except FileNotFoundError:
+            pass
 
 def align_prediction_to_target_template(predicted_atom_positions: Array, predicted_atom_mask: Array, template_atom_positions: Array, template_atom_mask: Array, flags: Array) -> Array:
     ca_atom_index = ATOM_INDEX['CA']
@@ -287,11 +325,11 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.prediction_compile_cache.set(cache_key, compiled_prediction)
         return compiled_prediction
 
-    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0) -> StructurePredictions:
+    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0, compile_only: bool=False) -> StructurePredictions:
         model = self._resolve_model_name(model)
-        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale) for name, protein_complex in protein_states.items()}
+        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale, compile_only) for name, protein_complex in protein_states.items()}
 
-    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float) -> StructurePrediction:
+    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float, compile_only: bool=False) -> StructurePrediction:
         chain_names = tuple(sorted(protein_complex))
         true_lengths = tuple(len(protein_complex[name]) for name in chain_names)
         padded_complex = padded_prediction_complex(protein_complex, self.length_bucket_size, self.target_pad_length) if self.target_pad_length else protein_complex
@@ -317,7 +355,14 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             entity_id = jnp.pad(entity_id, [0, padding_length], constant_values=len(chain_names))
             interface_asym_id = jnp.pad(interface_asym_id, [0, padding_length], constant_values=len(chain_names))
             seq_mask = jnp.pad(seq_mask, [0, padding_length])
-        positions, mask, metrics = self._compiled_complex_prediction(model, padded_residue_count)(self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
+        compiled_prediction = self._compiled_complex_prediction(model, padded_residue_count)
+        prediction_arguments = (self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
+        with one_worker_compiles((self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)) as compiling:
+            if compiling:
+                compiled_prediction.lower(*prediction_arguments).compile()
+        if compile_only:
+            return StructurePrediction(protein_complex=protein_complex, metrics={})
+        positions, mask, metrics = compiled_prediction(*prediction_arguments)
         positions, mask = positions[:residue_count], mask[:residue_count]
         metrics = {name: trim_prediction_padding(value, residue_count) for name, value in metrics.items()}
         positions = align_prediction_to_target_template(positions, mask, atoms[:residue_count], atom_mask[:residue_count], flags[:residue_count])
@@ -379,7 +424,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.gradient_compile_cache.set(cache_key, compiled_gradient)
         return compiled_gradient
 
-    def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False) -> tuple[StructurePredictions, dict[str, Array]]:
+    def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False, compile_blocking: bool=True) -> tuple[StructurePredictions, dict[str, Array]]:
         model = self._resolve_model_name(model)
         _, original_shared_chains = collect_shared_chains(protein_states)
         state_names = canonical_state_names(protein_states)
@@ -401,8 +446,9 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         frozen_interfaces = frozen_interface_arguments(losses, shared_chains)
         compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses)))):
-            compiled_sequence_gradients.lower(*gradient_arguments).compile()
+        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses))), compile_blocking) as compiling:
+            if compiling:
+                compiled_sequence_gradients.lower(*gradient_arguments).compile()
         if compile_only:
             return {}, {}, jnp.asarray(0.0)
         (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
