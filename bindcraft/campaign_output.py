@@ -352,7 +352,8 @@ def summary_row(campaign: str, scope: str, metric: str, values: list[float]) -> 
     return {'campaign': campaign, 'scope': scope, 'metric': metric, 'samples': len(values), 'mean': statistics.fmean(values), 'std': statistics.pstdev(values) if len(values) > 1 else 0.0, 'min': min(values), 'max': max(values)}
 
 def claimed_trajectory_directory(trajectory_directory: str) -> bool:
-    #only one worker can create a folder, so the folder itself is the claim
+    if os.path.exists(f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'):
+        return False
     try:
         os.makedirs(trajectory_directory)
         return True
@@ -386,7 +387,7 @@ def archive_trajectory_folder(trajectory_directory: str) -> str | None:
     if not os.path.isdir(trajectory_directory):
         return None
     archive_path = f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'
-    partial_path = f'{path}.{platform.node()}.{os.getpid()}.partial'
+    partial_path = f'{archive_path}.{platform.node()}.{os.getpid()}.partial'
     with zipfile.ZipFile(partial_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for directory, _, filenames in os.walk(trajectory_directory):
             for filename in sorted(filenames):
