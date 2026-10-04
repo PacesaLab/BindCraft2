@@ -2,6 +2,7 @@ import ast
 import functools
 import importlib.util
 import os
+import warnings
 import pkgutil
 
 def append_xla_flags(flags: str) -> None:
@@ -16,6 +17,7 @@ if 'triton_gemm' not in os.environ.get('XLA_FLAGS', ''):
     append_xla_flags('--xla_gpu_enable_triton_gemm=false')
 if os.environ.get('BC2_XLA_EXTRA', '').strip():
     append_xla_flags(os.environ['BC2_XLA_EXTRA'].strip())
+warnings.filterwarnings('ignore', message=r"Error reading persistent compilation cache entry for 'jit_(_where|dot_product_attention)", category=UserWarning)
 
 COMMAND_ENTRY = 'main'
 DEFINITION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
