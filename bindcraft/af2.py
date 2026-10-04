@@ -325,11 +325,11 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.prediction_compile_cache.set(cache_key, compiled_prediction)
         return compiled_prediction
 
-    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0, compile_only: bool=False) -> StructurePredictions:
+    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0, compile_only: bool=False, compile_blocking: bool=True) -> StructurePredictions:
         model = self._resolve_model_name(model)
-        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale, compile_only) for name, protein_complex in protein_states.items()}
+        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale, compile_only, compile_blocking) for name, protein_complex in protein_states.items()}
 
-    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float, compile_only: bool=False) -> StructurePrediction:
+    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float, compile_only: bool=False, compile_blocking: bool=True) -> StructurePrediction:
         chain_names = tuple(sorted(protein_complex))
         true_lengths = tuple(len(protein_complex[name]) for name in chain_names)
         padded_complex = padded_prediction_complex(protein_complex, self.length_bucket_size, self.target_pad_length) if self.target_pad_length else protein_complex
@@ -359,7 +359,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         prediction_arguments = (self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
         prediction_shape = (self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)
         if prediction_shape not in self.compiled_shapes:
-            with one_worker_compiles(prediction_shape) as compiling:
+            with one_worker_compiles(prediction_shape, compile_blocking) as compiling:
                 if compiling:
                     compiled_prediction.lower(*prediction_arguments).compile()
                     self.compiled_shapes.add(prediction_shape)
