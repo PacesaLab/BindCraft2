@@ -18,7 +18,7 @@ The **modality** sets the binder format and the conformational objective. Name i
 | `Fab` | Heavy + light chains, editable variable domains, constant body kept off the target | Fab-format binders. | The classic therapeutic/diagnostic antibody fragment: more stable and manufacturable than an scFv, and the base the scFv here is derived from. |
 | `ARP` | Ankyrin Repeat protein — a consensus ankyrin-repeat scaffold with editable repeat positions | Ankyrin-repeat (ARP) binders. | Ankyrin Repeat protein — non-antibody, disulfide-free, high-stability scaffold: cheap microbial production, intracellular use, and easy multivalent fusions. |
 | `induced_fit` | The interface is optimised toward a 5 Å shift free vs bound and accepted above 2 Å | The binder should change shape on binding. | Binders for targets that **change shape on binding** (conformational selection), and allosteric or state-selective binders. |
-| `fold_switch` | The whole fold differs free vs bound (TM-score ≤ 0.75) | You explicitly want a fold-switching binder. | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
+| `fold_switch` | The whole fold differs free vs bound: TM-score ≤ 0.75 **and** ≥ 1 Å of movement | You explicitly want a fold-switching binder. | Conditional/switchable binders and sensors, where the binder is meant to adopt a different fold free vs bound. |
 
 ## Combining modalities
 

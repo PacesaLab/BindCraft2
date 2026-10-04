@@ -1,9 +1,11 @@
 {
-  "description": "The whole fold differs between free and bound, under a TM-score ceiling of 0.75 measured on the confidently predicted fold",
+  "description": "The whole fold differs between free and bound: a TM-score ceiling of 0.75 and at least 1 Angstrom of movement, both measured on the confidently predicted fold",
   "weights_fold_switching": 1.0,
   "weights_interface_contacts": 2.0,
   "induced_fit_tm_target": 0.6,
+  "fold_switch_rmsd_target": 1.0,
   "max_induced_fit_tm_final": 0.75,
+  "min_induced_fit_rmsd_final": 1.0,
   "filters": {
     "Binder_RMSD": {
       "threshold": null

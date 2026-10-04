@@ -768,12 +768,18 @@ def induced_fit_interface_loss(protein_states: ProteinStates, predictions: Struc
     return jnp.square(jax.nn.relu(interface_rmsd_target - interface_rmsd)) * (interface_mask.sum() >= 3) * (alignment_mask.sum() >= 3)
 
 @loss('fold_switching', target_weighting='binds_target')
-def fold_switching_loss(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, chain: str='binder', tm_target: float=0.6, confidence_floor: float=0.7) -> Array:
+def fold_switching_loss(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, chain: str='binder', tm_target: float=0.6, rmsd_target: float=1.0, confidence_floor: float=0.7) -> Array:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return jnp.asarray(0.0)
     coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, chain, confidence_floor)
-    return jnp.square(jax.nn.relu(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask) - tm_target)) * (valid_mask.sum() >= 3)
+    #TM alone is not enough to ask for a different fold: its distance scale is drawn from the number of
+    #residues being compared, and the confidence mask can leave so few that the scale reaches its 0.5
+    #Angstrom floor, where a tenth of an Angstrom reads as a fold change. The displacement is asked for
+    #in Angstroms as well, which carries no such scale.
+    separated = jnp.square(jax.nn.relu(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask) - tm_target))
+    moved = jnp.square(jax.nn.relu(rmsd_target - core_aligned_interface_rmsd(coordinates, reference_coordinates, valid_mask, valid_mask)))
+    return (separated + moved) * (valid_mask.sum() >= 3)
 
 def elastic_network_covariance(coordinates: Array, residue_mask: Array, contact_decay: float, damping: float, eps: float=1e-08) -> Array:
     residue_count = coordinates.shape[0]

@@ -50,6 +50,25 @@ same comparison:
 - `Induced_Fit_RMSD` asks *did the fold really move?* It discounts low-confidence residues, because
   a flailing tail is not conformational change.
 
+### Fold switching now asks for movement in Angstroms as well as TM
+
+A TM-score ceiling on its own turned out to be easy to satisfy without changing fold. TM's distance
+scale is derived from the number of residues being compared, and because the comparison is masked by
+confidence, a binder with few confident residues shrinks that scale to its 0.5 Angstrom floor — where
+a tenth of an Angstrom reads as a fold change. A 62-residue design with **0.38 A** of actual movement
+scored TM 0.70 and passed a 0.75 ceiling; scored against its full length it would have been 0.98.
+
+`fold_switching` now asks for a displacement as well, in Angstroms, which carries no such scale:
+
+```
+loss = relu(TM - tm_target)^2  +  relu(rmsd_target - RMSD)^2
+```
+
+`fold_switch_rmsd_target` defaults to **1.0 A** and is set by the `fold_switch` modality, alongside a
+matching `min_induced_fit_rmsd_final` of 1.0 that gates `Induced_Fit_RMSD` on acceptance. The
+threshold is guidance first and a filter second, so trajectories are pushed toward real movement
+rather than merely screened for it afterwards. Designs already moving more than 1 A are unaffected.
+
 ### Campaigns without a modality now load the `binder` preset
 
 A campaign file that names no `modality` previously loaded **no modality layer at all**, despite

@@ -79,6 +79,7 @@
         "higher": false
       }
     },
+    "fold_switch_rmsd_target": null,
     "forced_targeting": false,
     "forced_targeting_shell": null,
     "gpu_ids": null,
@@ -182,6 +183,7 @@
     "min_framework_packing_final": null,
     "min_hotspot_contact_final": null,
     "min_induced_fit_interface_rmsd_final": null,
+    "min_induced_fit_rmsd_final": null,
     "min_interface_buried_area_final": null,
     "min_iptm_anneal": 0.5,
     "min_iptm_final": 0.7,
