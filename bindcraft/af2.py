@@ -1,5 +1,4 @@
 import copy
-import fcntl
 import hashlib
 import os
 import platform
@@ -276,6 +275,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 raise ValueError(f'no AlphaFold parameters for {model_name!r} in data_dir {data_dir!r}; run "bindcraft fetch-weights" to download them')
             self.model_parameters[model_name] = model_parameters
         self.prediction_compile_cache = CompiledModelCache(max_cache_size)
+        self.compiled_shapes: set = set()
         self.gradient_compile_cache = CompiledModelCache(max_cache_size)
 
     def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None) -> af_model.RunModel:
@@ -357,9 +357,12 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             seq_mask = jnp.pad(seq_mask, [0, padding_length])
         compiled_prediction = self._compiled_complex_prediction(model, padded_residue_count)
         prediction_arguments = (self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        with one_worker_compiles((self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)) as compiling:
-            if compiling:
-                compiled_prediction.lower(*prediction_arguments).compile()
+        prediction_shape = (self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)
+        if prediction_shape not in self.compiled_shapes:
+            with one_worker_compiles(prediction_shape) as compiling:
+                if compiling:
+                    compiled_prediction.lower(*prediction_arguments).compile()
+                    self.compiled_shapes.add(prediction_shape)
         if compile_only:
             return StructurePrediction(protein_complex=protein_complex, metrics={})
         positions, mask, metrics = compiled_prediction(*prediction_arguments)
@@ -446,9 +449,12 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         frozen_interfaces = frozen_interface_arguments(losses, shared_chains)
         compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses))), compile_blocking) as compiling:
-            if compiling:
-                compiled_sequence_gradients.lower(*gradient_arguments).compile()
+        gradient_shape = (self.model_families[model], complex_shapes, reference_shapes, tuple(sorted(losses)), tuple((state_name, resolve_subbatch_size(sum(chain_lengths), self.subbatch_size)) for state_name, _, chain_lengths in complex_shapes), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)
+        if gradient_shape not in self.compiled_shapes:
+            with one_worker_compiles(gradient_shape, compile_blocking) as compiling:
+                if compiling:
+                    compiled_sequence_gradients.lower(*gradient_arguments).compile()
+                    self.compiled_shapes.add(gradient_shape)
         if compile_only:
             return {}, {}, jnp.asarray(0.0)
         (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
