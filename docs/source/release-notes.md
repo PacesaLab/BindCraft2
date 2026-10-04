@@ -24,18 +24,15 @@ binder chain, so a disordered tail flailing between the two predictions counted 
 change. They now run only over residues predicted above a 0.7 pLDDT floor. This measures what the
 objectives are actually asking about — whether the *structured* part of the binder moved.
 
-**Because of that masking, the acceptance thresholds were recalibrated.** The same physical motion
-now reports a smaller number than it did before, so the bars moved with it:
+**The induced-fit acceptance bar moved with that masking**, from
+`min_induced_fit_interface_rmsd_final` 5.0 Å to **2.0 Å**: excluding a flailing tail lowers the
+measured displacement, so the previous bar was no longer reachable. The **training target is
+deliberately unchanged** — `induced_fit_delta` stays at 5.0 Å — so the objective still optimises
+past the bar that accepts it.
 
-| Filter | Before | Now |
-| --- | --- | --- |
-| `min_induced_fit_interface_rmsd_final` | 5.0 Å | **2.0 Å** |
-| `max_induced_fit_tm_final` | 0.6 | **0.75** |
-
-These are not a loosening. The previous bars were unreachable in practice once a confidently
-predicted fold is what gets measured. The **training targets are deliberately unchanged** —
-`induced_fit_delta` stays at 5.0 Å and `induced_fit_tm_target` at 0.6 — so each objective still
-optimises past the bar that accepts it.
+The fold-switch ceiling is a separate story, told under *Fold switching* below: the masking briefly
+broke the TM-score itself, and the number has been set from what the modality achieves rather than
+from compensating for that.
 
 > One consequence worth knowing: the adaptive early exit for the binder-alone block compares
 > against the *training target*, not the acceptance bar. A design that already clears the 2 Å
@@ -50,24 +47,33 @@ same comparison:
 - `Induced_Fit_RMSD` asks *did the fold really move?* It discounts low-confidence residues, because
   a flailing tail is not conformational change.
 
-### Fold switching now asks for movement in Angstroms as well as TM
+### Fold switching: a corrected TM-score, and a displacement to go with it
 
-A TM-score ceiling on its own turned out to be easy to satisfy without changing fold. TM's distance
-scale is derived from the number of residues being compared, and because the comparison is masked by
-confidence, a binder with few confident residues shrinks that scale to its 0.5 Angstrom floor — where
-a tenth of an Angstrom reads as a fold change. A 62-residue design with **0.38 A** of actual movement
-scored TM 0.70 and passed a 0.75 ceiling; scored against its full length it would have been 0.98.
+**The TM-score was being computed on the wrong length, and is fixed.** TM-score takes its distance
+scale `d0` from the length of the fold being compared. When conformational comparisons became
+confidence-masked, the weight of the confident subset was passed in place of that length. A
+62-residue binder with 21 confident residues drove `d0` to its 0.5 Angstrom floor, where a tenth of
+an Angstrom reads as a changed fold: one design moving **0.38 A** scored TM 0.70 and was accepted.
+Scored on its own length it is **0.98**, which is what the structure shows. `d0` is now taken from
+the residue count of the fold, as TM-score defines it, while the score is still averaged over the
+confident residues. Reported TM values rise accordingly and are comparable with TM-scores computed
+anywhere else.
 
-`fold_switching` now asks for a displacement as well, in Angstroms, which carries no such scale:
+**`max_induced_fit_tm_final` is 0.85.** The previous 0.75 existed to compensate for the broken scale
+and rejects every design once the scale is right. 0.85 is set from what the modality actually
+produces: a large conformational change within one fold, rather than a textbook fold switch, which
+would need TM below 0.5.
+
+**A displacement is now asked for as well**, in Angstroms, which carries no length-dependent scale:
 
 ```
 loss = relu(TM - tm_target)^2  +  relu(rmsd_target - RMSD)^2
 ```
 
 `fold_switch_rmsd_target` defaults to **1.0 A** and is set by the `fold_switch` modality, alongside a
-matching `min_induced_fit_rmsd_final` of 1.0 that gates `Induced_Fit_RMSD` on acceptance. The
-threshold is guidance first and a filter second, so trajectories are pushed toward real movement
-rather than merely screened for it afterwards. Designs already moving more than 1 A are unaffected.
+matching `min_induced_fit_rmsd_final` of 1.0 gating `Induced_Fit_RMSD` on acceptance. It is guidance
+first and a gate second, so trajectories are pushed toward real movement rather than only screened
+for it afterwards. Designs already moving more than 1 A are unaffected.
 
 ### Campaigns without a modality now load the `binder` preset
 

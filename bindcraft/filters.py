@@ -408,7 +408,8 @@ def induced_fit_tm_metric(protein_states: ProteinStates, predictions: StructureP
     coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor)
     if float(valid_mask.sum()) < 3:
         return None
-    return float(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask))
+    _, _, structural_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    return float(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask, structural_mask.sum()))
 
 def epitope_contact_masks(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str, binder: str, target: str, cutoff: float, epitope_cutoff: float):
     target = resolve_target_chain(predictions[prediction_state].protein_complex, target, prediction_state)
