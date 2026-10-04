@@ -225,8 +225,12 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
         exit_codes = [process.wait() for process in processes]
         for relay in relays:
             relay.join()
-        report_campaign_close(project_folders, requested_designs, max_trajectories)
-        return next((exit_code for exit_code in exit_codes if exit_code), 0)
+        failed = [(index, code) for index, code in enumerate(exit_codes) if code]
+        if failed:
+            print('\n' + '\n'.join(f'worker={index} exited {code}' + (f' (killed by signal {-code})' if code < 0 else '') + f', see {log_directory}/*_worker_{index:02d}_*.log' for index, code in failed), flush=True)
+        else:
+            report_campaign_close(project_folders, requested_designs, max_trajectories)
+        return next((code for code in exit_codes if code), 0)
     finally:
         for process in processes:
             if process.poll() is None:
