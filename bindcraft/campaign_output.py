@@ -386,7 +386,7 @@ def archive_trajectory_folder(trajectory_directory: str) -> str | None:
     if not os.path.isdir(trajectory_directory):
         return None
     archive_path = f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'
-    partial_path = f'{archive_path}.partial'
+    partial_path = f'{path}.{platform.node()}.{os.getpid()}.partial'
     with zipfile.ZipFile(partial_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for directory, _, filenames in os.walk(trajectory_directory):
             for filename in sorted(filenames):
@@ -447,7 +447,7 @@ def summarize_campaign(project_folder: str, campaign: str | None=None) -> list[d
 
 def write_csv_rows(rows: list[dict], path: str, column_names=SUMMARY_FIELDS) -> str:
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-    partial_path = f'{path}.partial'
+    partial_path = f'{path}.{platform.node()}.{os.getpid()}.partial'
     with open(partial_path, 'w', newline='') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=list(column_names))
         writer.writeheader()
