@@ -126,7 +126,7 @@ def append_metric_row(csv_path: str, row: dict) -> None:
             column_names = list(reader.fieldnames or [])
     column_names = ordered_csv_columns(column_names + [name for name in row if name not in column_names])
     os.makedirs(os.path.dirname(csv_path) or '.', exist_ok=True)
-    partial_path = f'{csv_path}.partial'
+    partial_path = f'{csv_path}.{platform.node()}.{os.getpid()}.partial'
     with open(partial_path, 'w', newline='') as metrics_file:
         writer = csv.DictWriter(metrics_file, fieldnames=column_names, restval='')
         writer.writeheader()
