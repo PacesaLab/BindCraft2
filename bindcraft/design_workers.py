@@ -5,7 +5,6 @@ import sys
 import threading
 import time
 import tempfile
-from pathlib import Path
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
 from bindcraft.protein_preparation import design_residue_count
