@@ -273,7 +273,6 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         self.shape_attention_backend: dict = {}
         self.executed_lengths: set[int] = set()
         self.last_attention_backend = self.attention_backend
-        self.last_gradient_bytes: float | None = None
 
     def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None, attention_backend: str | None=None) -> af_model.RunModel:
         attention_backend = attention_backend or self.attention_backend
@@ -367,7 +366,8 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         print(f'{self.attention_backend} attention {reason} at {residue_total} padded residues; using the {ATTENTION_FALLBACK_BACKEND} route for this shape instead', flush=True)
         self.shape_attention_backend[shape_signature] = ATTENTION_FALLBACK_BACKEND
         compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, ATTENTION_FALLBACK_BACKEND)
-        self.last_gradient_bytes = executable_claimed_bytes(compiled_gradient.lower(*gradient_arguments).compile())
+        #compiled here rather than on first call, so it happens under the lock the caller holds
+        compiled_gradient.lower(*gradient_arguments).compile()
         return compiled_gradient
 
     def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss], attention_backend: str | None=None) -> Callable:
@@ -453,7 +453,6 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
             if shape_signature not in self.shape_attention_backend:
                 self.shape_attention_backend[shape_signature] = attention_backend
-                self.last_gradient_bytes = executable_claimed_bytes(executable)
                 if attention_backend != ATTENTION_FALLBACK_BACKEND and not executable_fits(executable):
                     attention_backend = ATTENTION_FALLBACK_BACKEND
                     compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'needs more than this worker may allocate')
