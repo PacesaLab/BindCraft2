@@ -209,7 +209,9 @@ def binder_alone_operation(design_settings: BinderDesignSettings, design_model: 
 def build_stage_plan(design_settings: BinderDesignSettings, losses: dict[str, DesignLoss], multi_chain_binders: tuple[tuple[str, ...], ...], design_model: DifferentiableProteinPredictor, wild_type_states: ProteinStates, recorder: TrajectoryRecorder | None=None) -> tuple[DesignStage, ...]:
     settings = design_settings.settings
     stage_rounds = merged_gradient_sequence_updates(design_settings)
-    fold_switching = bool(induced_fit_hinge_names(losses))
+    #named for the hinge it needs, not for fold switching: induced_fit_hinge_names matches
+    #induced_fit_interface alone, so a fold_switch campaign never reaches the binder-alone block
+    induced_fit_hinge = bool(induced_fit_hinge_names(losses))
     multitarget = len(design_settings.prepared_states) > 1
     sequence_optimizers = {'screen': LogitSequenceOptimizer(iterations=stage_rounds['screen'], start_softmax_weight=0.0, end_softmax_weight=0.9, multi_chain_binders=multi_chain_binders),
                            'refine': LogitSequenceOptimizer(iterations=stage_rounds['refine'], start_softmax_weight=0.9, end_softmax_weight=1.0, multi_chain_binders=multi_chain_binders),
@@ -224,9 +226,9 @@ def build_stage_plan(design_settings: BinderDesignSettings, losses: dict[str, De
             review.append(pooled_prediction_operation(design_settings, design_model, sequence_optimizers[name]))
         if name == 'screen':
             review.append(beta_sheet_budget_operation(design_settings, design_model, sequence_optimizers))
-        if name == 'screen' and fold_switching:
+        if name == 'screen' and induced_fit_hinge:
             advance.append(freeze_induced_fit_operation())
-        if fold_switching and name != 'harden':
+        if induced_fit_hinge and name != 'harden':
             advance.append(binder_alone_operation(design_settings, design_model, multi_chain_binders, recorder, name))
         stage_plan.append(DesignStage(name, sequence_optimizers[name], name != 'harden', tuple(prepare), tuple(review), tuple(advance)))
     return tuple(stage_plan)
