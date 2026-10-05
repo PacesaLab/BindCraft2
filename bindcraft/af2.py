@@ -217,7 +217,12 @@ def executable_claimed_bytes(executable) -> float:
     return float(analysis.temp_size_in_bytes + analysis.argument_size_in_bytes + analysis.output_size_in_bytes)
 
 def executable_fits(executable) -> bool:
-    return executable_claimed_bytes(executable) <= GRADIENT_MEMORY_SHARE * worker_memory_budget_bytes()
+    #An unknown budget is not a budget of zero. worker_memory_budget_bytes reads the card through
+    #nvidia-smi, and the container images this project ships carry none, so a budget of 0.0 means
+    #"not measurable here" and would otherwise demote every shape to the chunked route. A shape that
+    #genuinely does not fit is still caught by the out-of-memory retry around the gradient call.
+    budget = worker_memory_budget_bytes()
+    return not budget or executable_claimed_bytes(executable) <= GRADIENT_MEMORY_SHARE * budget
 
 def is_out_of_memory(failure: BaseException) -> bool:
     text = str(failure).lower()

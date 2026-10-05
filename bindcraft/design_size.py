@@ -106,6 +106,10 @@ def main(arguments: list[str] | None=None) -> None:
         raise SystemExit(2)
     settings = read_settings(settings_paths[0], parse_setting_overrides(preset_assignments + assignments))
     budget = worker_memory_budget_bytes()
+    if not budget:
+        print('this host does not report card memory, so there is no budget to size against: '
+              'nvidia-smi is missing or named no visible card', file=sys.stderr)
+        raise SystemExit(2)
     af2_weights, _mpnn_weights = model_weights()
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)
     design_plan = replace(campaign_design_plan(settings), subbatch_size=settings.get('subbatch_size', 'auto'))
