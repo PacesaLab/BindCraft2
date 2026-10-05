@@ -122,7 +122,11 @@ def campaign_subbatch_size(settings: dict, residue_count: int | None) -> int | N
     requested = settings.get('subbatch_size', 'auto')
     if requested != 'auto' or not residue_count:
         return requested
-    return None if UNSHARDED_BYTES_PER_RESIDUE_PAIR * residue_count ** 2 <= GRADIENT_MEMORY_SHARE * worker_memory_budget_bytes() else requested
+    #A budget of zero means the card did not report its memory, not that it has none. Reading it
+    #as none would shard every complex past SUBBATCH_RESIDUE_THRESHOLD, which is the opposite
+    #of what executable_fits does with the same number.
+    budget = worker_memory_budget_bytes()
+    return None if not budget or UNSHARDED_BYTES_PER_RESIDUE_PAIR * residue_count ** 2 <= GRADIENT_MEMORY_SHARE * budget else requested
 
 def design_worker_launch_stagger(settings: dict) -> float:
     return float(os.environ.get('BINDCRAFT_WORKER_LAUNCH_STAGGER', settings.get('worker_launch_stagger', PACKED_LAUNCH_STAGGER_SECONDS)))

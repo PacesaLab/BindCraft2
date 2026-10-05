@@ -15,9 +15,15 @@ a prediction state against a reference state directly instead of going through t
 machinery. `weights_induced_fit_global` has been removed from the settings vocabulary, so a file
 or `--set` naming it is now **rejected outright** rather than quietly ignored.
 
-> **Migration:** replace `weights_induced_fit_global` with `weights_fold_switching`. If you were
-> also setting `induced_fit_tm_target` or `max_induced_fit_tm_final` by hand, see the new defaults
-> below. The `fold_switch` modality already sets all three for you.
+> **Migration:** the objective has three retired spellings and all three now refuse to load, so
+> fix them together rather than one failure at a time:
+>
+> - `weights_induced_fit_global` → `weights_fold_switching`
+> - `losses: {"induced_fit_global": ...}`, block or scalar → `losses: {"fold_switching": ...}`
+> - `losses.fold_switching.params.binder_shapes` → the top-level `binder_shapes` setting
+>
+> If you were also setting `induced_fit_tm_target` or `max_induced_fit_tm_final` by hand, see the
+> new defaults below. The `fold_switch` modality already sets all of them for you.
 
 **Free-versus-bound comparisons are now masked by confidence.** They previously ran over the whole
 binder chain, so a disordered tail flailing between the two predictions counted as conformational
@@ -90,9 +96,17 @@ campaign file is applied last.
 > campaign needs disulfides, name the `disulfide_staple` property, which re-allows it. The shipped
 > `pdl1_disulfide.json` now does exactly this.
 
-Shipped examples now name their own modality rather than relying on a `--modality` flag, so running
-an example gives the same result whether or not you pass one. `pdl1_arp.json` now names `ARP`,
-which means it finally gets the aromatic downweighting its description has always promised.
+Two of those four are acceptance gates that were not applied before, so a campaign that was
+accepting designs may now accept fewer. This is the change most likely to alter a file you already
+have, because it needs no edit on your part.
+
+It also makes the shipped examples forward-only: twelve of them name no modality and rely on this
+default, so carrying one back to 1.0.3 resolves it without any of the four.
+
+The fourteen examples that do need a non-default modality now name it rather than relying on a
+`--modality` flag, so running one gives the same result whether or not you pass the flag.
+`pdl1_arp.json` now names `ARP`, which means it finally gets the aromatic downweighting its
+description has always promised.
 
 ### Modality order no longer changes the result
 
@@ -131,14 +145,6 @@ things for one chain to be: `peptide` with `cyclic_peptide`, `large_binder` or `
 `cyclic_peptide` said "A 7-20 residue peptide" and drew 7–16, so the top of its own stated range was
 unreachable. The ceiling now matches the description. Name `binder_lengths` yourself for any other
 range.
-
-### Two shipped examples had filters that contradicted their presets
-
-`pdl1_humanization.json` and `pdl1_protease_stability.json` carried inline thresholds stricter than
-the property presets they are built from, so they rejected designs the property considers good:
-
-- `max_mhc_anchor_score_final` 0.5 → **1.95**
-- `max_exposed_loop_fraction_final` 0.35 → **0.7**
 
 ### Examples no longer restate what their modality already says
 
