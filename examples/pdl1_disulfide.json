@@ -8,11 +8,7 @@
   "max_trajectories": 60,
   "disulfide_staple": true,
   "min_plddt_refine": 0.65,
-  "min_iptm_anneal": 0.5,
-  "min_iptm_harden": 0.5,
   "min_plddt_mutate": 0.65,
-  "min_iptm_mutate": 0.5,
   "min_iptm_final": 0.6,
-  "min_monomer_plddt_final": 0.7,
   "project_folder": "results/pdl1_disulfide"
 }

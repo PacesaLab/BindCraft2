@@ -1,9 +1,9 @@
 {
-  "description": "A 6-20 residue peptide closed head to tail; read Cyclic_Closure_Distance",
+  "description": "A 7-20 residue peptide closed head to tail; read Cyclic_Closure_Distance",
   "validation_model": "multimer",
   "cyclize_peptide": true,
   "binder_lengths": [
-    6,
+    7,
     20
   ],
   "aa_bias": {

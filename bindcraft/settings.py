@@ -402,8 +402,8 @@ MODALITY_PRECEDENCE = {'binder': 1, 'homo_oligomer': 2, 'multidomain': 2, 'pepti
 MODALITY_SETTING_OWNERS = {'weights_binder_contacts': 'multidomain'}
 
 #Pairs that name two different things for one chain to be. Each is refused rather than resolved.
-INCOMPATIBLE_MODALITIES = (('cyclic_peptide', 'large_binder', 'a macrocycle of 6-20 residues is not a 250-600 residue binder'),
-                           ('cyclic_peptide', 'multidomain', 'a macrocycle of 6-20 residues has no room for two domains'),
+INCOMPATIBLE_MODALITIES = (('cyclic_peptide', 'large_binder', 'a macrocycle of 7-20 residues is not a 250-600 residue binder'),
+                           ('cyclic_peptide', 'multidomain', 'a macrocycle of 7-20 residues has no room for two domains'),
                            ('cyclic_peptide', 'peptide', 'a peptide is either closed head to tail or it is linear'),
                            ('large_binder', 'peptide', 'a peptide of 12-25 residues is not a 250-600 residue binder'),
                            ('multidomain', 'peptide', 'a peptide of 12-25 residues has no room for two domains'))

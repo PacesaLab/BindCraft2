@@ -126,11 +126,11 @@ things for one chain to be: `peptide` with `cyclic_peptide`, `large_binder` or `
 `cyclic_peptide` with `large_binder` or `multidomain`. The full compatibility table is in
 [Choosing a modality](design-guide/03-choosing-a-modality.md).
 
-### Cyclic peptides default to 6–20 residues
+### Cyclic peptides draw the full 7–20 residues their description promises
 
-`cyclic_peptide` now draws lengths of 6–20, matching its description. It previously said 7–20 and
-drew 6–16. Note this differs from the 7-residue floor set upstream; name `binder_lengths` yourself
-if you want a different range.
+`cyclic_peptide` said "A 7-20 residue peptide" and drew 7–16, so the top of its own stated range was
+unreachable. The ceiling now matches the description. Name `binder_lengths` yourself for any other
+range.
 
 ### Two shipped examples had filters that contradicted their presets
 
@@ -140,12 +140,24 @@ the property presets they are built from, so they rejected designs the property 
 - `max_mhc_anchor_score_final` 0.5 → **1.95**
 - `max_exposed_loop_fraction_final` 0.35 → **0.7**
 
-### Renamed example
+### Examples no longer restate what their modality already says
 
-`pdl1_induced_fit_global.json` is now **`pdl1_fold_switch_whole.json`** and writes to
-`results/pdl1_fold_switch_whole`. Its `induced_fit_monomer_*` settings were dropped: those drive
-the binder-alone block, which only an `induced_fit_interface` objective reaches, so under
-`fold_switch` they did nothing.
+Every shipped example now names its modality and keeps only the settings that differ from it.
+That removed 146 redundant keys across 21 files — `pdl1_multidomain.json` went from 38 keys to 9,
+and the scaffold examples no longer carry a second copy of the `mutate_positions` string their
+preset already supplies. Resolved settings are unchanged for every example; the files are shorter,
+not different. If you copied an example as a starting point, the keys you see now are the ones
+that example is actually making a decision about.
+
+### One fold-switching example, not two
+
+`pdl1_induced_fit_global.json` and `pdl1_fold_switching.json` are both replaced by a single
+**`pdl1_fold_switch.json`**, writing to `results/pdl1_fold_switch`. The two differed only in
+hand-tuned weights that the `fold_switch` modality now sets properly, so the surviving example
+names the modality and inherits the rest. Its `induced_fit_monomer_*` settings were dropped:
+those drive the binder-alone block, which only an `induced_fit_interface` objective reaches, so
+under `fold_switch` they did nothing. Its explicit `binder_shapes` were dropped too — the
+schedule derives the same free/bound pair on its own.
 
 ### Smaller behaviour changes
 
