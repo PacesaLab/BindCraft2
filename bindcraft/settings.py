@@ -707,6 +707,7 @@ def read_campaign_metadata(path: str | Path | None) -> dict[str, str]:
 def read_settings(path: str | Path, overrides: dict | None=None) -> dict:
     settings_path = Path(path).resolve()
     request = json.loads(settings_path.read_text())
+    request.pop('description', None)
     for target in request.get('targets', []):
         target['target_path'] = str((settings_path.parent / target['target_path']).resolve())
     if request.get('binder_scaffold'):
