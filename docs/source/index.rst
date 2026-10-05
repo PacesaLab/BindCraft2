@@ -52,5 +52,4 @@ Explore the documentation below to learn how BindCraft2 works, choose the right 
    reference
    outputs
    examples
-   release-notes
 
