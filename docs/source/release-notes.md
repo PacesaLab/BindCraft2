@@ -144,19 +144,22 @@ the property presets they are built from, so they rejected designs the property 
 
 Every shipped example now keeps only the settings that differ from the presets it resolves
 through. Fourteen name a modality; the other twelve take the `binder` default described above.
-That removed 146 redundant keys across 21 files — `pdl1_multidomain.json` went from 38 keys to 9,
-and the scaffold examples no longer carry a second copy of the `mutate_positions` string their
-preset already supplies. No example resolves differently as a result of the cleanup; the files are shorter, not
-different. The one example whose behaviour did move, `pdl1_cyclic_peptide.json`, moved because
-of the length range above and not because of this. If you copied an example as a starting point, the keys you see now are the ones
-that example is actually making a decision about.
+That removed 146 redundant keys across 21 files, and `pdl1_multidomain.json` went from 38 keys
+to 9. The scaffold examples no longer carry a second copy of the `mutate_positions` string their
+preset already supplies.
+
+No example resolves differently as a result of the cleanup; the files are shorter, not different.
+The one example whose behaviour did move, `pdl1_cyclic_peptide.json`, moved because of the length
+range above and not because of this. If you copied an example as a starting point, the keys you
+see now are the ones that example is actually making a decision about.
 
 ### One fold-switching example, not two
 
 `pdl1_induced_fit_global.json` and `pdl1_fold_switching.json` are both replaced by a single
-**`pdl1_fold_switch.json`**, writing to `results/pdl1_fold_switch`. The two differed only in
-hand-tuned weights that the `fold_switch` modality now sets properly, so the surviving example
-names the modality and inherits the rest. Its `induced_fit_monomer_*` settings were dropped:
+**`pdl1_fold_switch.json`**, writing to `results/pdl1_fold_switch`. The two differed in three loss weights and in the fold-switching `tm_target`: the retired
+`pdl1_fold_switching.json` asked 0.45, pushing for a larger fold change, where the surviving
+example takes the modality's 0.6. Acceptance is unchanged either way — a TM-score ceiling of
+0.85 and at least 1 Angstrom of movement — so the two always accepted the same designs. Its `induced_fit_monomer_*` settings were dropped:
 those drive the binder-alone block, which only an `induced_fit_interface` objective reaches, so
 under `fold_switch` they did nothing. Its explicit `binder_shapes` were dropped too — the
 schedule derives the same free/bound pair on its own.
@@ -168,7 +171,10 @@ schedule derives the same free/bound pair on its own.
   of silently selecting the wrong card.
 - **A lost design worker is now reported and surfaces in the exit status.** A worker killed by a
   signal returns 128 + the signal number, so a shell or scheduler can see the campaign failed.
-- The binder-alone diagnostic logged as `global_tm` is now `fold_tm`.
+- The binder-alone diagnostic logged as `global_tm` is now `induced_fit_tm`. It is the same
+  number as the `Induced_Fit_TM` column, and only induced fit prints it, which is what the
+  old name obscured: `global` named a retired feature and `fold` names the one objective
+  that never reaches this line.
 - The package reports `1.0.4`. `main` had been reporting `1.0.1` through the v1.0.2 and v1.0.3
   releases.
 

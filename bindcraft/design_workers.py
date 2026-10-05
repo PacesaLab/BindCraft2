@@ -62,7 +62,21 @@ def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
     except (OSError, subprocess.CalledProcessError):
         return {}
     fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    return {uuid: (float(free_mib) / 1024, float(total_mib) / 1024) for uuid, free_mib, total_mib in fields}
+    return dict(filter(None, (card_memory_gb(row) for row in fields)))
+
+def card_memory_gb(row: list[str]) -> tuple[str, tuple[float, float]] | None:
+    """One card's free and total memory, or None when this card does not report it.
+
+    nvidia-smi prints `[N/A]` for memory on a unified-memory board and on a MIG instance, and a
+    row that cannot be read is one card the planner does not know about, not a campaign that
+    cannot start. A missing card reads as an unmeasurable budget, which executable_fits already
+    treats as no constraint.
+    """
+    try:
+        uuid, free_mib, total_mib = row
+        return uuid, (float(free_mib) / 1024, float(total_mib) / 1024)
+    except ValueError:
+        return None
 
 def estimate_design_memory_gb(residue_count: int) -> float:
     return DESIGN_MEMORY_SAFETY_FACTOR * (DESIGN_MODEL_RESIDENT_GB + DESIGN_ACTIVATION_BYTES_PER_RESIDUE_PAIR * int(residue_count) ** 2 / 1e9)

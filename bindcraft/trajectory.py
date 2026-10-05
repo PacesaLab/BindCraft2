@@ -48,7 +48,7 @@ def binder_alone_switch_metrics(protein_states: ProteinStates, predictions: Stru
     interface_name = next((name for name in induced_fit_hinge_names(losses) if name.split('.')[0] == 'induced_fit_interface'), None)
     interface_parameters = losses[interface_name].function.keywords if interface_name else {}
     interface_rmsd = induced_fit_interface_rmsd_metric(protein_states, predictions, cutoff=float(interface_parameters.get('cutoff', 8.0)), interface_residues=interface_mask_residues(losses[interface_name].interface_mask)) if interface_name else None
-    return {'binder_alone_plddt': float(predictions[BINDER_ALONE].metrics['plddt'].mean()), 'interface_rmsd': interface_rmsd, 'fold_tm': induced_fit_tm_metric(protein_states, predictions)}
+    return {'binder_alone_plddt': float(predictions[BINDER_ALONE].metrics['plddt'].mean()), 'interface_rmsd': interface_rmsd, 'induced_fit_tm': induced_fit_tm_metric(protein_states, predictions)}
 
 def binder_alone_switch_reached(metrics: dict[str, float | None], losses: dict[str, DesignLoss], minimum_plddt: float) -> bool:
     if metrics['binder_alone_plddt'] < minimum_plddt:

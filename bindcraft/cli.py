@@ -158,7 +158,7 @@ def design_card_name() -> str | None:
         listing = subprocess.run(['nvidia-smi', '--query-gpu=uuid,name', '--format=csv,noheader'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return None
-    names = {uuid.strip(): name.strip() for uuid, name in (line.split(',', 1) for line in listing.splitlines() if line.strip())}
+    names = {row[0].strip(): row[1].strip() for row in (line.split(',', 1) for line in listing.splitlines() if line.strip()) if len(row) == 2}
     return next(filter(None, map(names.get, visible_design_gpus())), None)
 
 def campaign_compile_cache_root(settings_path: str, assignments: list[str]=()) -> str | None:

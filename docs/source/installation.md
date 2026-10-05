@@ -174,7 +174,7 @@ The first five carry an environment variable that takes precedence over the sett
 | `subbatch_size` | — | `auto` | An integer splits large calculations to save memory; `null` disables chunking. |
 | `length_bucket_size` | — | 32 | Pad lengths to reuse compiled shapes; 1 disables padding. |
 | `compile_next_length` | — | true | Prepare the next length while the current trajectory runs. |
-| `attention_backend` | — | `auto` | Choose the attention implementation; options: 'auto', 'stock', 'cudnn' |
+| `attention_backend` | — | `auto` | Choose the attention implementation; options: 'auto', 'cudnn', 'chunked', 'stock'. 'auto' takes cuDNN where it works and 'chunked' otherwise |
 | `use_cueq` | — | false | Enable cuEquivariance kernels, which the CUDA extras install. |
 
 `BINDCRAFT_WORKER_ID`, `BINDCRAFT_WORKER_COUNT` and `BINDCRAFT_BINDER_LENGTHS` are set **for** each worker by the campaign. **Do not set them; a process that carries `BINDCRAFT_WORKER_ID` believes it is a worker and will not fan out.**
