@@ -294,7 +294,7 @@ The table lists every objective. Default weights describe the standard binder be
 | `weights_n_terminus_away` | off | Direct the N terminus away from the target. |
 | `weights_c_terminus_away` | off | Direct the C terminus away from the target. |
 | `weights_disulfide` | off | Charge for every cysteine left without a partner. The loss reads in free cysteines, so a weight of 1.0 prices one unpaired cysteine at 1.0. |
-| `weights_fold_switching` | off | Whole-fold difference between the prediction state and its reference state: bound versus binder-alone by default, or the explicit conformation groups when `binder_shapes` names them. Asks for both a TM-score below `induced_fit_tm_target` and at least `fold_switch_rmsd_target` Angstroms of movement, measured on the confidently predicted fold. |
+| `weights_fold_switching` | off | Whole-fold difference between the prediction state and its reference state: bound versus binder-alone by default, or the explicit conformation groups when `binder_shapes` names them. Asks for both a TM-score below `induced_fit_tm_target` and at least `fold_switch_delta` Angstroms of movement, measured on the confidently predicted fold. |
 | `weights_induced_fit_interface` | off | Movement of the binding surface relative to the binder core. |
 | `weights_collective_softness` | off | Favour a shared collective hinge motion over local floppiness. |
 | `weights_multidomain` | off | Separate, compact domains connected by a linker. |

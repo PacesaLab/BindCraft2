@@ -79,7 +79,7 @@
         "higher": false
       }
     },
-    "fold_switch_rmsd_target": null,
+    "fold_switch_delta": null,
     "forced_targeting": false,
     "forced_targeting_shell": null,
     "gpu_ids": null,

@@ -76,7 +76,9 @@ would need TM below 0.5.
 loss = relu(TM - tm_target)^2  +  relu(rmsd_target - RMSD)^2
 ```
 
-`fold_switch_rmsd_target` defaults to **1.0 A** and is set by the `fold_switch` modality, alongside a
+`fold_switch_delta` is the Angstroms of movement the loss optimises toward, named to match the
+`induced_fit_delta` it sits beside rather than the design target a campaign binds. It defaults
+to **1.0 A** and is set by the `fold_switch` modality, alongside a
 matching `min_induced_fit_rmsd_final` of 1.0 gating `Induced_Fit_RMSD` on acceptance. It is guidance
 first and a gate second, so trajectories are pushed toward real movement rather than only screened
 for it afterwards. Designs already moving more than 1 A are unaffected.

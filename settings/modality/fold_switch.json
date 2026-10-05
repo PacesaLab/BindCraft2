@@ -3,7 +3,7 @@
   "weights_fold_switching": 1.0,
   "weights_interface_contacts": 2.0,
   "induced_fit_tm_target": 0.6,
-  "fold_switch_rmsd_target": 1.0,
+  "fold_switch_delta": 1.0,
   "max_induced_fit_tm_final": 0.85,
   "min_induced_fit_rmsd_final": 1.0,
   "filters": {
