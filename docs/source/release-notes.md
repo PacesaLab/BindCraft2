@@ -142,11 +142,13 @@ the property presets they are built from, so they rejected designs the property 
 
 ### Examples no longer restate what their modality already says
 
-Every shipped example now names its modality and keeps only the settings that differ from it.
+Every shipped example now keeps only the settings that differ from the presets it resolves
+through. Fourteen name a modality; the other twelve take the `binder` default described above.
 That removed 146 redundant keys across 21 files — `pdl1_multidomain.json` went from 38 keys to 9,
 and the scaffold examples no longer carry a second copy of the `mutate_positions` string their
-preset already supplies. Resolved settings are unchanged for every example; the files are shorter,
-not different. If you copied an example as a starting point, the keys you see now are the ones
+preset already supplies. No example resolves differently as a result of the cleanup; the files are shorter, not
+different. The one example whose behaviour did move, `pdl1_cyclic_peptide.json`, moved because
+of the length range above and not because of this. If you copied an example as a starting point, the keys you see now are the ones
 that example is actually making a decision about.
 
 ### One fold-switching example, not two

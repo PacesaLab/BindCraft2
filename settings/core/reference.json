@@ -220,6 +220,7 @@
     "multitarget_swap_threshold": null,
     "multitarget_tied_redesign": null,
     "multitarget_warmup_patience": null,
+    "mutate_gate_draws": null,
     "mutate_positions": null,
     "mutate_steps": null,
     "n_domains": null,

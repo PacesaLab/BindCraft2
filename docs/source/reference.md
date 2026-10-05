@@ -32,7 +32,7 @@ Each layer overrides the ones above it in the table. A target therefore wins ove
 
 ### Every setting at its default
 
-`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 235 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
+`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 237 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
 
 ### Paths
 
@@ -382,6 +382,7 @@ The shortcuts below turn the corresponding acceptance requirement into a floor (
 | `min_framework_packing_final` | `Framework_Packing_Fraction` — require loops to cover the non-binding face. |
 | `min_hotspot_contact_final` | `Hotspot_Contact_Fraction` — require coverage of named hotspots. |
 | `min_induced_fit_interface_rmsd_final` | `Induced_Fit_Interface_RMSD` — require movement of the binding surface. |
+| `min_induced_fit_rmsd_final` | `Induced_Fit_RMSD` — require the fold itself to move, in Angstroms, measured on the confidently predicted residues. |
 | `min_interface_buried_area_final` | `Interface_BuriedArea` — require a minimum binder-side buried area. |
 | `min_receptor_chains_contacted_final` | `Receptor_Chains_Contacted` — require engagement of several receptor chains. |
 | `min_scaffold_sequence_retained_final` | `Scaffold_Sequence_Retained_Fraction` — retain held scaffold sequence. |
@@ -473,7 +474,8 @@ A sweep needs `max_trajectories`, divides its budget between arms, and disables 
 | `length_bucket_size` | 32 | Pad lengths to reuse compiled calculations; 1 disables padding. |
 | `compile_next_length` | true | Prepare the next length while the current trajectory runs. |
 | `subbatch_size` | `auto` | Split large calculations to reduce memory; an integer fixes the chunk size, `null` disables chunking. |
-| `attention_backend` | `auto` | Choose attention implementation; leave automatic unless diagnosing performance. |
+| `attention_backend` | `auto` | Choose attention implementation: `auto`, `cudnn`, `chunked` or `stock`. `auto` uses cuDNN where it works and `chunked` otherwise, and demotes any single design shape to `chunked` when its compiled gradient would not fit the worker budget. Leave automatic unless diagnosing performance. |
+| `mutate_gate_draws` | `1` | How many predictions the mutate-stage gate averages over. The mutate gate judges a single fresh draw, which samples one AF2 model at random and is noisier than the four gates before it; raising this takes the best of several draws at the cost of that many extra predictions per trajectory. |
 | `use_cueq` | false | Enable optional cuEquivariance kernels when installed. |
 | `auto_multi_gpu` | true | Use the visible GPU allocation automatically; false keeps a single process. |
 | `workers_per_gpu`, `max_workers_per_gpu` | `auto`, 8 | Set or cap concurrent design workers per card. |
