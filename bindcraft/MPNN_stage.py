@@ -160,9 +160,6 @@ class RedesignContext(NamedTuple):
 def prepare_binder_redesign(protein_complex: dict[str, Protein], design_settings: BinderDesignSettings, binder: str, target: str, prediction_state: str, target_states: ProteinStates | None=None, predicted_states: ProteinStates | None=None, multi_chain_binder: tuple[str, ...]=(), binder_alone_complex: dict[str, Protein] | None=None, design_pae: Array | None=None, trajectory_seed: int=0) -> RedesignContext:
     settings = design_settings.settings
     keep_interface = not settings.get('redesign_interface', DEFAULT_SETTINGS['redesign_interface'])
-    #whatever compares a bound state against a free one - induced fit and fold switching both - the
-    #residues that differ between them are the design's answer, so they are held through the redesign
-    #that would otherwise write a sequence with no reason to fold two ways
     mobile_residues = induced_fit_mobile_residues(protein_complex[binder], binder_alone_complex[binder], float(settings.get('induced_fit_mpnn_threshold', 2.0)), int(settings.get('induced_fit_mpnn_shell', 1)), float(settings.get('induced_fit_mpnn_designed_share', INDUCED_FIT_DESIGNED_SHARE))) if binder_alone_complex else None
     if mobile_residues is not None:
         print(f'conformational change: holding {int(mobile_residues.sum())} of {len(protein_complex[binder])} residue(s) that move between the two states through ProteinMPNN', flush=True)

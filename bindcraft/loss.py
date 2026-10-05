@@ -661,10 +661,6 @@ def align_binder_coordinates(coordinates: Array, reference_coordinates: Array, v
     return alignment_matrix_product(coordinates - center, jax.lax.stop_gradient(rotation).T) + reference_center
 
 def aligned_binder_tm_score(coordinates: Array, reference_coordinates: Array, valid_mask: Array, scored_length: Array | float | None=None, eps: float=1e-08) -> Array:
-    #TM-score reads its distance scale off the length of the fold being compared, so scored_length is
-    #the residue count of that fold and not the weight of whatever subset is being scored. Passing a
-    #confidence weight here instead would shrink the scale toward its floor and read sub-Angstrom
-    #noise as a changed fold.
     squared_distances = jnp.square(align_binder_coordinates(coordinates, reference_coordinates, valid_mask) - reference_coordinates).sum(-1)
     length = valid_mask.sum() if scored_length is None else scored_length
     distance_scale = jnp.maximum(1.24 * jnp.maximum(length - 15, eps) ** (1 / 3) - 1.8, 0.5)
@@ -778,10 +774,7 @@ def fold_switching_loss(protein_states: ProteinStates, predictions: StructurePre
     if prediction_state not in predictions or reference_state not in predictions:
         return jnp.asarray(0.0)
     coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, chain, confidence_floor)
-    #the fold is scored over the confident residues but measured against the length of the whole fold,
-    #which is what TM-score's distance scale is defined on
     _, _, structural_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, chain)
-    #a displacement in Angstroms is asked for alongside the TM ceiling, carrying no length-dependent scale
     separated = jnp.square(jax.nn.relu(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask, structural_mask.sum()) - tm_target))
     moved = jnp.square(jax.nn.relu(rmsd_target - core_aligned_interface_rmsd(coordinates, reference_coordinates, valid_mask, valid_mask)))
     return (separated + moved) * (valid_mask.sum() >= 3)

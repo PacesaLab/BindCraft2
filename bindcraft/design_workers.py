@@ -61,22 +61,14 @@ def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
         listing = subprocess.run(['nvidia-smi', '--query-gpu=uuid,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return {}
-    fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    return dict(filter(None, (card_memory_gb(row) for row in fields)))
-
-def card_memory_gb(row: list[str]) -> tuple[str, tuple[float, float]] | None:
-    """One card's free and total memory, or None when this card does not report it.
-
-    nvidia-smi prints `[N/A]` for memory on a unified-memory board and on a MIG instance, and a
-    row that cannot be read is one card the planner does not know about, not a campaign that
-    cannot start. A missing card reads as an unmeasurable budget, which executable_fits already
-    treats as no constraint.
-    """
-    try:
-        uuid, free_mib, total_mib = row
-        return uuid, (float(free_mib) / 1024, float(total_mib) / 1024)
-    except ValueError:
-        return None
+    memory = {}
+    for row in [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]:
+        try:
+            uuid, free_mib, total_mib = row
+            memory[uuid] = (float(free_mib) / 1024, float(total_mib) / 1024)
+        except ValueError:
+            continue
+    return memory
 
 def estimate_design_memory_gb(residue_count: int) -> float:
     return DESIGN_MEMORY_SAFETY_FACTOR * (DESIGN_MODEL_RESIDENT_GB + DESIGN_ACTIVATION_BYTES_PER_RESIDUE_PAIR * int(residue_count) ** 2 / 1e9)
@@ -122,9 +114,6 @@ def campaign_subbatch_size(settings: dict, residue_count: int | None) -> int | N
     requested = settings.get('subbatch_size', 'auto')
     if requested != 'auto' or not residue_count:
         return requested
-    #A budget of zero means the card did not report its memory, not that it has none. Reading it
-    #as none would shard every complex past SUBBATCH_RESIDUE_THRESHOLD, which is the opposite
-    #of what executable_fits does with the same number.
     budget = worker_memory_budget_bytes()
     return None if not budget or UNSHARDED_BYTES_PER_RESIDUE_PAIR * residue_count ** 2 <= GRADIENT_MEMORY_SHARE * budget else requested
 
@@ -205,7 +194,6 @@ class TrajectoryOrderedConsole:
                 print(self.finished.pop(number), end='', flush=True)
 
     def aside(self, note: str) -> None:
-        """A whole line that is not a trajectory, kept out of the middle of somebody's block."""
         with self.console_lock:
             print(note, flush=True)
 
@@ -224,7 +212,6 @@ def relay_worker_output(stream, log_file, console: TrajectoryOrderedConsole, wor
         console.hand_over(worker_index, trajectory_number, ''.join(block), None)
 
 def worker_stop_reason(exit_code: int) -> str:
-    """How a worker stopped, named the way a shell names it."""
     if exit_code >= 0:
         return f'exited {exit_code}'
     try:
@@ -233,12 +220,10 @@ def worker_stop_reason(exit_code: int) -> str:
         return f'killed by signal {-exit_code}'
 
 def campaign_exit_status(exit_codes: list[int]) -> int:
-    """The first worker failure, as a status a shell can read: a signal becomes 128 + its number."""
     failure = next((exit_code for exit_code in exit_codes if exit_code), 0)
     return 128 - failure if failure < 0 else failure
 
 def supervise_design_worker(process: subprocess.Popen, log_file, console: TrajectoryOrderedConsole, worker_index: int) -> None:
-    """Relay a worker's output, and say so the moment it stops on anything but its own terms."""
     try:
         relay_worker_output(process.stdout, log_file, console, worker_index)
     finally:

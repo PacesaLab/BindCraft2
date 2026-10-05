@@ -233,7 +233,6 @@ def configure_induced_fit(settings: dict, request: ConfigurationRequest) -> None
 def configure_fold_switching(settings: dict, request: ConfigurationRequest) -> None:
     if isinstance(settings['filters'], dict):
         settings['filters'].setdefault('Induced_Fit_TM', {'threshold': settings.get('max_induced_fit_tm_final', DEFAULT_INDUCED_FIT_TM_FINAL), 'higher': False})
-        #a fold that reads as switched on TM but has not moved an Angstrom has not switched
         settings['filters'].setdefault('Induced_Fit_RMSD', {'threshold': settings.get('min_induced_fit_rmsd_final', DEFAULT_FOLD_SWITCH_RMSD), 'higher': True})
 
 def terminus_away_feature(terminus: str) -> 'CampaignFeature':
@@ -387,21 +386,12 @@ def requested_preset_names(request: dict, tier: str, presets: Path=CAMPAIGN_PRES
     return tuple(name for name in shipped_preset_names(tier, presets) if request.get(name))
 
 def scaffolded_modality_names(request: dict, presets: Path=CAMPAIGN_PRESETS) -> tuple[str, ...]:
-    """The named modalities that each bring their own framework. A campaign designs one."""
     return tuple(name for name in requested_preset_names(request, 'modality', presets) if read_preset('modality', name, presets).get('binder_scaffold'))
 
-#A later layer wins the settings it shares with an earlier one, so the presets are folded in
-#ascending precedence: a framework fixes the chain it is built on, a chain kind sets its own size,
-#an assembly says how many copies or domains rather than how long, and binder is the fallback that
-#yields to whatever else was named. Conformational objectives are folded after every format,
-#because the gates they stand down are the ones the formats install.
 MODALITY_PRECEDENCE = {'binder': 1, 'homo_oligomer': 2, 'multidomain': 2, 'peptide': 3, 'cyclic_peptide': 3, 'large_binder': 3, 'ARP': 4, 'Fab': 4, 'scFv': 4, 'VHH': 4}
 
-#One setting does not follow that order: multidomain zeroes the binder-contact weight on purpose,
-#because domains that are pulled together are not separate domains.
 MODALITY_SETTING_OWNERS = {'weights_binder_contacts': 'multidomain'}
 
-#Pairs that name two different things for one chain to be. Each is refused rather than resolved.
 INCOMPATIBLE_MODALITIES = (('cyclic_peptide', 'large_binder', 'a macrocycle of 7-20 residues is not a 250-600 residue binder'),
                            ('cyclic_peptide', 'multidomain', 'a macrocycle of 7-20 residues has no room for two domains'),
                            ('cyclic_peptide', 'peptide', 'a peptide is either closed head to tail or it is linear'),
@@ -488,13 +478,6 @@ def reject_unrecognized_settings(overrides: dict) -> None:
         raise ValueError('unrecognized campaign settings: ' + ', '.join(rejected))
 
 def merge_setting_entry(base: dict, entry: dict) -> dict:
-    """Merge one loss or filter entry over another, deep-merging the nested `params` block.
-
-    A plain {**base, **entry} replaces `params` wholesale, so naming one parameter silently
-    discards every sibling the defaults carried. Every shipped loss carries at least two, and
-    for binder_pae the dropped `prediction_state` falls back to the signature default
-    `binder_alone`, which scores a different structure than the configured `complex`.
-    """
     merged = {**base, **entry}
     if isinstance(base.get('params'), dict) and isinstance(entry.get('params'), dict):
         merged['params'] = {**base['params'], **entry['params']}

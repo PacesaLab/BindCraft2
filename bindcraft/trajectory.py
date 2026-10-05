@@ -208,8 +208,6 @@ def binder_alone_operation(design_settings: BinderDesignSettings, design_model: 
 def build_stage_plan(design_settings: BinderDesignSettings, losses: dict[str, DesignLoss], multi_chain_binders: tuple[tuple[str, ...], ...], design_model: DifferentiableProteinPredictor, wild_type_states: ProteinStates, recorder: TrajectoryRecorder | None=None) -> tuple[DesignStage, ...]:
     settings = design_settings.settings
     stage_rounds = merged_gradient_sequence_updates(design_settings)
-    #named for the hinge it needs, not for fold switching: induced_fit_hinge_names matches
-    #induced_fit_interface alone, so a fold_switch campaign never reaches the binder-alone block
     induced_fit_hinge = bool(induced_fit_hinge_names(losses))
     multitarget = len(design_settings.prepared_states) > 1
     sequence_optimizers = {'screen': LogitSequenceOptimizer(iterations=stage_rounds['screen'], start_softmax_weight=0.0, end_softmax_weight=0.9, multi_chain_binders=multi_chain_binders),
@@ -255,13 +253,6 @@ def judge_stage(trajectory: TrajectoryState, design_settings: BinderDesignSettin
     return (trajectory if filter_result is True else trajectory._replace(predictions=filter_predictions, failed=tuple(filter_result))), measured
 
 def gate_predictions(design_settings: BinderDesignSettings, design_model: ProteinPredictor, protein_states: ProteinStates, losses: dict[str, DesignLoss]) -> StructurePredictions:
-    """The prediction the mutate and final gates are judged on.
-
-    Every gradient design stage gates on the best round of its pool (run_gradient_design_stage's
-    select_best_round, by weighted design loss). The mutate stage historically gated on a single
-    fresh draw, which samples one AF2 model at random and is far noisier than the estimate the
-    four preceding gates used. mutate_gate_draws=1 keeps that shipped behaviour exactly.
-    """
     draws = int(design_settings.settings.get('mutate_gate_draws') or 1)
     if draws <= 1:
         return design_model.predict(protein_states)
