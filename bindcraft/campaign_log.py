@@ -1,10 +1,32 @@
 import math
 import os
+import tomllib
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from bindcraft.protein import recorded_number
 
+def source_tree_version() -> str | None:
+    """The version declared beside the code that is running, when it is running from a source tree."""
+    pyproject = Path(__file__).resolve().parents[1] / 'pyproject.toml'
+    try:
+        with pyproject.open('rb') as handle:
+            project = tomllib.load(handle)['project']
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return None
+    return project.get('version') if project.get('name') == 'bindcraft' else None
+
 def released_version() -> str:
-    """The version every output is stamped with, read from the installed package so it cannot drift from pyproject."""
+    """The version every output is stamped with, taken from the code that produced it.
+
+    Installed metadata is a snapshot from install time, and a source tree on PYTHONPATH shadows
+    whatever wheel is installed, so reading the metadata stamped outputs with a version the running
+    code was not: a checkout at 1.0.4 over a 1.0.0 install wrote 'v1.0.0' onto every structure. The
+    tree's own pyproject is what the code is; installed metadata is the fallback for a wheel that
+    has no tree beside it. bindcraft_revision carries the commit, which was already right.
+    """
+    declared = source_tree_version()
+    if declared:
+        return f'BindCraft 2 v{declared}'
     try:
         return f'BindCraft 2 v{version("bindcraft")}'
     except PackageNotFoundError:

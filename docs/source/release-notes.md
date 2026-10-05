@@ -186,6 +186,18 @@ schedule derives the same free/bound pair on its own.
 - The package reports `1.0.4`. `main` had been reporting `1.0.1` through the v1.0.2 and v1.0.3
   releases.
 
+### Outputs are stamped with the version of the code that wrote them
+
+`bindcraft_version` was read from installed package metadata, which is a snapshot taken when the
+package was installed. A source checkout on `PYTHONPATH` shadows whatever wheel is installed, so a
+1.0.4 tree running over a 1.0.0 install stamped **`BindCraft 2 v1.0.0`** onto every structure, every
+CSV row and every campaign record. It now reads the version declared beside the code that is
+running, and falls back to installed metadata for a wheel with no source tree beside it.
+
+`bindcraft_revision` was already correct — it carries the commit, with `-dirty` when the tree has
+uncommitted changes — so a structure written before this fix can still be traced by its revision
+even though its version is wrong.
+
 ### Known issues
 
 - **Use one target with `fold_switch`.** A fold-switching campaign that names several targets
