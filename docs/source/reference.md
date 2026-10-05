@@ -196,6 +196,7 @@ Detargeting only checks the off-targets supplied. Use `targets[].objective: "det
 | `confidence_floor` | 0.7 | Lowest predicted confidence a residue may have and still count toward a conformational comparison. One campaign-wide value, read by both conformational objectives and all three conformational checks, so the gradient and the gate judge the same residues. |
 | `induced_fit_delta`, `induced_fit_interface_cutoff` | Objective 3 Å; preset 5 Å, 8 Å | Desired interface RMSD and distance defining the interface. |
 | `induced_fit_tm_target` | 0.6 | Desired ceiling on similarity between whole folds. |
+| `max_induced_fit_tm_final`, `min_induced_fit_rmsd_final`, `min_induced_fit_interface_rmsd_final` | 0.85, 1 Å, 2 Å | Acceptance gates for a conformational change. These apply whether the modality is named or the objective is weighted by hand. |
 | `induced_fit_monomer_steps` | 30 | Maximum unbound-binder optimisation steps in each induced-fit block. |
 | `induced_fit_monomer_chunk` | 5 | Steps between confidence checks in that block. |
 | `induced_fit_monomer_plddt` | 0.7 | Confidence goal for adaptive stopping. |

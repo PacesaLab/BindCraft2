@@ -18,8 +18,8 @@ DEFAULT_IDR_CROP_LENGTHS = 10, 40
 DEFAULT_VALIDATION_CROP_FLANK = 5
 DEFAULT_VALIDATION_MODEL_COUNT = 2
 MULTIMER_MODEL_POOL = tuple(f'model_{index}_multimer_v3' for index in range(1, 6))
-DEFAULT_INDUCED_FIT_INTERFACE_RMSD = 5.0
-DEFAULT_INDUCED_FIT_TM_TARGET = 0.6
+DEFAULT_INDUCED_FIT_INTERFACE_RMSD = 2.0
+DEFAULT_INDUCED_FIT_TM_FINAL = 0.85
 DEFAULT_FOLD_SWITCH_RMSD = 1.0
 DEFAULT_DISORDERED_TARGET_PLDDT = 0.6
 DEFAULT_DETARGET_INTERFACE_RESIDUES = 3
@@ -232,7 +232,7 @@ def configure_induced_fit(settings: dict, request: ConfigurationRequest) -> None
 
 def configure_fold_switching(settings: dict, request: ConfigurationRequest) -> None:
     if isinstance(settings['filters'], dict):
-        settings['filters'].setdefault('Induced_Fit_TM', {'threshold': settings.get('max_induced_fit_tm_final', settings.get('induced_fit_tm_target', DEFAULT_INDUCED_FIT_TM_TARGET)), 'higher': False})
+        settings['filters'].setdefault('Induced_Fit_TM', {'threshold': settings.get('max_induced_fit_tm_final', DEFAULT_INDUCED_FIT_TM_FINAL), 'higher': False})
         #a fold that reads as switched on TM but has not moved an Angstrom has not switched
         settings['filters'].setdefault('Induced_Fit_RMSD', {'threshold': settings.get('min_induced_fit_rmsd_final', DEFAULT_FOLD_SWITCH_RMSD), 'higher': True})
 
