@@ -193,6 +193,7 @@ Detargeting only checks the off-targets supplied. Use `targets[].objective: "det
 | Setting | Default | Why change it |
 | --- | --- | --- |
 | `binder_shapes` | Unset | Define explicit conformation groups. |
+| `confidence_floor` | 0.7 | Lowest predicted confidence a residue may have and still count toward a conformational comparison. One campaign-wide value, read by both conformational objectives and all three conformational checks, so the gradient and the gate judge the same residues. |
 | `induced_fit_delta`, `induced_fit_interface_cutoff` | Objective 3 Å; preset 5 Å, 8 Å | Desired interface RMSD and distance defining the interface. |
 | `induced_fit_tm_target` | 0.6 | Desired ceiling on similarity between whole folds. |
 | `induced_fit_monomer_steps` | 30 | Maximum unbound-binder optimisation steps in each induced-fit block. |
@@ -325,8 +326,8 @@ Shared selectors are `prediction_state` (which prepared target or `binder_alone`
 | `non_helical` | `cutoff=6.0` |
 | `termini_distance` | `threshold_distance=7.0` |
 | `disulfide` | `distance=3.8`, `sigma=1.5`, `sequence_separation=3`, `temperature=0.1` |
-| `fold_switching` | `tm_target=0.6`, `rmsd_target=1.0`, `prediction_state='complex'`, `reference_state='binder_alone'`, `chain='binder'`, `confidence_floor=0.7` |
-| `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None`, `reference_state='binder_alone'`, `confidence_floor=0.7` |
+| `fold_switching` | `tm_target=0.6`, `rmsd_target=1.0`, `prediction_state='complex'`, `reference_state='binder_alone'`, `chain='binder'` |
+| `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None`, `reference_state='binder_alone'` |
 | `collective_softness` | `contact_decay=8.0`, `damping=0.01`, `power_iterations=12`, `eps=1e-08` |
 | `multidomain` | `domain_ids=()`, `n_domains=2`, `min_domain_size=50`, `max_domain_size=180`, `max_domains=2`, `seed=0`, `domain_rg_weight=0.3`, `domain_sep_weight=0.0`, `domain_contact_cutoff=8.0`, `domain_pae_margin=0.15`, `domain_linker_gap=0.1`, `domain_linker_sharpness=0.03`, `domain_linker_helix_weight=0.0` |
 

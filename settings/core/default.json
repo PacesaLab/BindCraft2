@@ -1,5 +1,6 @@
 {
   "mpnn_model": "v_48_020",
+  "confidence_floor": 0.7,
   "mpnn_variant": "negative",
   "validation_recycles": 3,
   "validation_crop_flank": 5,
