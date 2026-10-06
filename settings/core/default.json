@@ -35,7 +35,7 @@
   "forced_targeting": false,
   "design_recycles": 1,
   "target_flexibility": 0.0,
-  "bigbang_initialization": false,
+  "large_complex_initialization": false,
   "hard_target": false,
   "desperation": true,
   "weights_plddt_loss": 0.1,

@@ -160,7 +160,7 @@ Add a compatible property as a command-line flag or a top-level JSON entry:
 | **Nearby termini** — bring the N and C termini together | `--termini-together` | `"termini_together": true` |
 | **Accessible termini** — direct both chain ends away from the target | `--termini-accessible` | `"termini_accessible": true` |
 | **Hard target** — re-predict each candidate from the pose the trajectory folded | `--hard-target` | `"hard_target": true` |
-| **Big bang** — seed the gradient stages too, so a binder folded from nothing starts at the origin | `--bigbang` | `"bigbang": true` |
+| **Large complex** — seed the gradient stages too, so a binder folded from nothing starts at the origin | `--large-complex` | `"large_complex": true` |
 
 For example:
 
@@ -168,7 +168,7 @@ For example:
 bindcraft design examples/pdl1.json --mixed-topology --set 'project_folder=results/pdl1_mixed'
 ```
 
-These properties are judged using computational proxies. See [property objectives and acceptance filters](docs/source/reference.md#property-objectives-and-acceptance-filters) for what each one measures and requires, and [starting conformations](docs/source/reference.md#starting-conformations) for the optional `--hard-target` and `--bigbang` flags.
+These properties are judged using computational proxies. See [property objectives and acceptance filters](docs/source/reference.md#property-objectives-and-acceptance-filters) for what each one measures and requires, and [starting conformations](docs/source/reference.md#starting-conformations) for the optional `--hard-target` and `--large-complex` flags.
 
 ### Combining modalities
 

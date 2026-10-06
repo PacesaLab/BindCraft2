@@ -40,7 +40,7 @@ length rather than trusting the output.
 The `benchmark` core profile (`"core": "benchmark"`) sets a fixed `campaign_seed` and turns
 `autotune` and `desperation` off, for a run you can reproduce.
 
-**`bigbang`** (and `bigbang_initialization`) seeds the gradient stages from the coordinates already
+**`large_complex`** (and `large_complex_initialization`) seeds the gradient stages from the coordinates already
 on hand rather than from the origin. Its payoff is in **large complexes (>~600 aa)**, where AlphaFold
 struggles to build a fold from scratch and a coordinate start gives it a foothold — reach for it with
 `large_binder`, `multidomain` or large targets. Small binders that fold easily from the origin gain

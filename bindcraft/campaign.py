@@ -70,9 +70,9 @@ def apply_desperation_settings(design_model, validation_model, settings: dict) -
         if prediction_model is not None:
             prediction_model.target_flexibility = float(settings.get('target_flexibility', DEFAULT_SETTINGS['target_flexibility']))
     if design_model is not None:
-        design_model.bigbang_initialization = design_seeds_from_given_coordinates(settings)
+        design_model.large_complex_initialization = design_seeds_from_given_coordinates(settings)
     if validation_model is not None:
-        validation_model.bigbang_initialization = validation_seeds_from_given_coordinates(settings)
+        validation_model.large_complex_initialization = validation_seeds_from_given_coordinates(settings)
 
 def desperate_prediction_pools(design_model, validation_model, settings: dict, build_validation_model) -> tuple:
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)

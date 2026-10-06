@@ -125,7 +125,7 @@ combinations (e.g. a scaffold modality with `cyclic_peptide`) are contradictory 
 at start-up.
 
 See [Helpful properties and objectives](design-guide/04-properties-and-objectives.md) for what each
-property actually does (and doesn't tell you), the `hard_target`/`bigbang` initialisation options,
+property actually does (and doesn't tell you), the `hard_target`/`large_complex` initialisation options,
 and the full incompatibility table.
 
 ---
@@ -141,7 +141,7 @@ accepted. Every rung raises the expected false-positive rate, so a design's `aut
 you how much to discount it.
 
 See [Desperation and autotuning](design-guide/05-desperation-and-autotuning.md) for the full ladder,
-the `benchmark` reproducible profile, and when `bigbang` initialisation is worth turning on.
+the `benchmark` reproducible profile, and when `large_complex` initialisation is worth turning on.
 
 ---
 

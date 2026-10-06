@@ -154,14 +154,14 @@ class CampaignFeature(NamedTuple):
 
 def hard_target_note(settings: dict) -> str:
     if design_seeds_from_given_coordinates(settings):
-        return 'big bang: the gradient stages start from the coordinates on hand, which for a binder folded from nothing is the origin'
+        return 'large complex: the gradient stages start from the coordinates on hand, which for a binder folded from nothing is the origin'
     return 'hard target: the re-prediction starts from the pose the trajectory folded, and the gradient stages start where they always do'
 
 def design_seeds_from_given_coordinates(settings: dict) -> bool:
-    return bool(settings.get('bigbang_initialization'))
+    return bool(settings.get('large_complex_initialization'))
 
 def validation_seeds_from_given_coordinates(settings: dict) -> bool:
-    return bool(settings.get('hard_target')) or bool(settings.get('bigbang_initialization'))
+    return bool(settings.get('hard_target')) or bool(settings.get('large_complex_initialization'))
 
 def binder_scaffold_name(settings: dict) -> str:
     return os.path.splitext(os.path.basename(str(settings.get('binder_scaffold') or '')))[0]
@@ -245,7 +245,7 @@ CAMPAIGN_FEATURES = (
     CampaignFeature('multi-chain binder', lambda settings: int(settings.get('copies', 1) or 1) > 1, shorthand='oligomer', switch='copies', configure=configure_oligomer,
                     checks=(ModalityCheck('Oligomer_Symmetry_RMSD', float('inf'), threshold_setting='max_oligomer_symmetry_rmsd_final'),),
                     conflicts=(('multidomain binder', 'the domain split does not engage across oligomer copies'),)),
-    CampaignFeature('hard target', lambda settings: bool(settings.get('hard_target')) or bool(settings.get('bigbang_initialization')),
+    CampaignFeature('hard target', lambda settings: bool(settings.get('hard_target')) or bool(settings.get('large_complex_initialization')),
                     note=hard_target_note),
     CampaignFeature('fold conditioning', lambda settings: bool(settings.get('binder_scaffold')), shorthand=lambda settings: binder_scaffold_name(settings).lower(), switch='binder_scaffold', configure=configure_fold_conditioning,
                     checks=(ModalityCheck('Scaffold_Sequence_Retained_Fraction', 0.0, True, 'min_scaffold_sequence_retained_final', parameters=scaffold_check_parameters),
@@ -430,7 +430,7 @@ def reject_percentage_thresholds(overrides: dict) -> None:
     if written:
         raise ValueError('these checks read a fraction of 0 to 1 rather than a percentage: ' + ', '.join(f'{name} {float(value):g} (write {float(value) / 100:g})' for name, value in written))
 
-RENAMED_SETTINGS = {'initial_guess': 'hard_target'}
+RENAMED_SETTINGS = {'initial_guess': 'hard_target', 'bigbang': 'large_complex', 'bigbang_initialization': 'large_complex_initialization'}
 
 def reject_unrecognized_settings(overrides: dict) -> None:
     accepted = known_campaign_settings()
