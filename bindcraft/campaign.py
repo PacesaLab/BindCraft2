@@ -111,7 +111,8 @@ def compile_next_length_bucket(design_settings, alphafold_model, key: jax.Array,
     def compile_gradient_graph() -> None:
         try:
             protein_states, _multi_chain_binders, losses = initialize_design_trajectory(design_settings, jax.random.split(jax.random.fold_in(key, trajectory_number))[0])
-            alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True)
+            alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True, compile_blocking=False)
+            alphafold_model.predict(protein_states, model=alphafold_model.models[0], compile_only=True, compile_blocking=False)
         except Exception as compile_failure:
             print(f'compiling the next length bucket failed, leaving it to the trajectory that folds there ({compile_failure})', flush=True)
     compile_thread = threading.Thread(target=compile_gradient_graph, daemon=True)

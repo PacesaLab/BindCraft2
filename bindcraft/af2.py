@@ -327,6 +327,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         self.shape_attention_backend: dict = {}
         self.executed_lengths: set[int] = set()
         self.last_attention_backend = self.attention_backend
+        self.compiled_shapes: set = set()
 
     def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None, attention_backend: str | None=None) -> af_model.RunModel:
         attention_backend = attention_backend or self.attention_backend
@@ -376,11 +377,11 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.prediction_compile_cache.set(cache_key, compiled_prediction)
         return compiled_prediction
 
-    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0) -> StructurePredictions:
+    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0, compile_only: bool=False, compile_blocking: bool=True) -> StructurePredictions:
         model = self._resolve_model_name(model)
-        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale) for name, protein_complex in protein_states.items()}
+        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale, compile_only, compile_blocking) for name, protein_complex in protein_states.items()}
 
-    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float) -> StructurePrediction:
+    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float, compile_only: bool=False, compile_blocking: bool=True) -> StructurePrediction:
         chain_names = tuple(sorted(protein_complex))
         true_lengths = tuple(len(protein_complex[name]) for name in chain_names)
         padded_complex = padded_prediction_complex(protein_complex, self.length_bucket_size, self.target_pad_length) if self.target_pad_length else protein_complex
@@ -406,7 +407,17 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             entity_id = jnp.pad(entity_id, [0, padding_length], constant_values=len(chain_names))
             interface_asym_id = jnp.pad(interface_asym_id, [0, padding_length], constant_values=len(chain_names))
             seq_mask = jnp.pad(seq_mask, [0, padding_length])
-        positions, mask, metrics = self._compiled_complex_prediction(model, padded_residue_count)(self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
+        compiled_prediction = self._compiled_complex_prediction(model, padded_residue_count)
+        prediction_arguments = (self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
+        prediction_shape = (self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)
+        if prediction_shape not in self.compiled_shapes:
+            with one_worker_compiles(prediction_shape, compile_blocking) as compiling:
+                if compiling:
+                    compiled_prediction.lower(*prediction_arguments).compile()
+                    self.compiled_shapes.add(prediction_shape)
+        if compile_only:
+            return StructurePrediction(protein_complex=protein_complex, metrics={})
+        positions, mask, metrics = compiled_prediction(*prediction_arguments)
         positions, mask = positions[:residue_count], mask[:residue_count]
         metrics = {name: trim_prediction_padding(value, residue_count) for name, value in metrics.items()}
         positions = align_prediction_to_target_template(positions, mask, atoms[:residue_count], atom_mask[:residue_count], flags[:residue_count])
@@ -477,7 +488,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.gradient_compile_cache.set(cache_key, compiled_gradient)
         return compiled_gradient
 
-    def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False) -> tuple[StructurePredictions, dict[str, Array]]:
+    def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False, compile_blocking: bool=True) -> tuple[StructurePredictions, dict[str, Array]]:
         model = self._resolve_model_name(model)
         _, original_shared_chains = collect_shared_chains(protein_states)
         state_names = canonical_state_names(protein_states)
@@ -503,13 +514,14 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         attention_backend = self.shape_attention_backend.get(shape_signature, self.attention_backend)
         compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses)))) as compiling:
-            executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
-            if shape_signature not in self.shape_attention_backend:
-                self.shape_attention_backend[shape_signature] = attention_backend
-                if attention_backend != ATTENTION_FALLBACK_BACKEND and not executable_fits(executable):
-                    attention_backend = ATTENTION_FALLBACK_BACKEND
-                    compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'needs more than this worker may allocate')
+        if shape_signature not in self.shape_attention_backend:
+            with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses))), compile_blocking) as compiling:
+                if compiling:
+                    executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
+                    self.shape_attention_backend[shape_signature] = attention_backend
+                    if attention_backend != ATTENTION_FALLBACK_BACKEND and not executable_fits(executable):
+                        attention_backend = ATTENTION_FALLBACK_BACKEND
+                        compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'needs more than this worker may allocate')
         self.last_attention_backend = attention_backend
         if compile_only:
             return {}, {}, jnp.asarray(0.0)
