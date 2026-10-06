@@ -6,6 +6,7 @@ import json
 import csv
 import math
 import os
+import platform
 import shutil
 import statistics
 import subprocess
@@ -125,7 +126,7 @@ def append_metric_row(csv_path: str, row: dict) -> None:
             column_names = list(reader.fieldnames or [])
     column_names = ordered_csv_columns(column_names + [name for name in row if name not in column_names])
     os.makedirs(os.path.dirname(csv_path) or '.', exist_ok=True)
-    partial_path = f'{csv_path}.partial'
+    partial_path = f'{csv_path}.{platform.node()}.{os.getpid()}.partial'
     with open(partial_path, 'w', newline='') as metrics_file:
         writer = csv.DictWriter(metrics_file, fieldnames=column_names, restval='')
         writer.writeheader()
@@ -162,7 +163,7 @@ class CampaignProgress:
         with locked_campaign_folder(self.state_path):
             state = json.loads(Path(self.state_path).read_text()) if os.path.exists(self.state_path) else self.recovered_state()
             yield state
-            partial_path = f'{self.state_path}.partial'
+            partial_path = f'{self.state_path}.{platform.node()}.{os.getpid()}.partial'
             Path(partial_path).write_text(json.dumps(state, sort_keys=True))
             os.replace(partial_path, self.state_path)
 
@@ -372,7 +373,7 @@ def archive_trajectory_folder(trajectory_directory: str) -> str | None:
     if not os.path.isdir(trajectory_directory):
         return None
     archive_path = f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'
-    partial_path = f'{archive_path}.partial'
+    partial_path = f'{archive_path}.{platform.node()}.{os.getpid()}.partial'
     with zipfile.ZipFile(partial_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for directory, _, filenames in os.walk(trajectory_directory):
             for filename in sorted(filenames):
@@ -433,7 +434,7 @@ def summarize_campaign(project_folder: str, campaign: str | None=None) -> list[d
 
 def write_csv_rows(rows: list[dict], path: str, column_names=SUMMARY_FIELDS) -> str:
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-    partial_path = f'{path}.partial'
+    partial_path = f'{path}.{platform.node()}.{os.getpid()}.partial'
     with open(partial_path, 'w', newline='') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=list(column_names))
         writer.writeheader()
