@@ -351,6 +351,15 @@ def trajectory_metric_means(metric_rows: list[dict]) -> dict[tuple[str, str], fl
 def summary_row(campaign: str, scope: str, metric: str, values: list[float]) -> dict:
     return {'campaign': campaign, 'scope': scope, 'metric': metric, 'samples': len(values), 'mean': statistics.fmean(values), 'std': statistics.pstdev(values) if len(values) > 1 else 0.0, 'min': min(values), 'max': max(values)}
 
+def claimed_trajectory_directory(trajectory_directory: str) -> bool:
+    if os.path.exists(f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'):
+        return False
+    try:
+        os.makedirs(trajectory_directory)
+        return True
+    except FileExistsError:
+        return False
+
 def trajectory_directories(project_folder: str) -> list[str]:
     trajectories_directory = stage_folder(project_folder, TRAJECTORY_STAGE)
     return [os.path.join(trajectories_directory, name) for name in sorted(os.listdir(trajectories_directory)) if os.path.isdir(os.path.join(trajectories_directory, name))] if os.path.isdir(trajectories_directory) else []

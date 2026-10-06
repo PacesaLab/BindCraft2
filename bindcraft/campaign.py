@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 import jax
 from bindcraft.af2 import AlphaFoldDesignModel, MONOMER_POOL, MULTIMER_POOL, campaign_length_bucket, padded_prediction_length
-from bindcraft.campaign_output import trajectory_output_path, CampaignProgress, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, TRAJECTORY_STAGE, accepted_state_suffixes, append_accepted_design, append_campaign_metrics, archive_trajectory_folder, designed_span_stamp, discard_trajectory_structures, drawn_weight_stamp, model_score_stamp, rank_accepted_designs, reprediction_facts, structure_metadata, stage_folder, stage_table, target_ordered_row, timing_stamp, weighted_target_order, write_campaign_metadata, write_campaign_summary
+from bindcraft.campaign_output import trajectory_output_path, CampaignProgress, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, TRAJECTORY_STAGE, accepted_state_suffixes, append_accepted_design, append_campaign_metrics, archive_trajectory_folder, claimed_trajectory_directory, designed_span_stamp, discard_trajectory_structures, drawn_weight_stamp, model_score_stamp, rank_accepted_designs, reprediction_facts, structure_metadata, stage_folder, stage_table, target_ordered_row, timing_stamp, weighted_target_order, write_campaign_metadata, write_campaign_summary
 from bindcraft.campaign_log import binder_optimization, campaign_budget_exhausted, campaign_closed, campaign_header, campaign_label, design_worker_index, speaks_for_the_campaign, trajectory_already_designed, trajectory_design_label, trajectory_header
 from bindcraft.design_identity import design_hash, design_name
 from bindcraft.parameter_sweep import arm_trajectory_budget, autotuned_settings, autotuned_stamp, parameter_sweep_arms, parameter_sweep_options, sweep_block_budgets, write_sweep_record
@@ -179,10 +179,10 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
         identity, _hashed_values = design_hash(tuned_settings, {**drawn, 'design_models': list(alphafold_model.models), 'attention_backend': attention_route}, trajectory_targets)
         name = design_name(trajectory_design_label(settings, tuple(state.objective for state in design_settings.prepared_states)), drawn['binder_length'], identity, settings.get('hash_design_names', True), trajectory_number)
         print(trajectory_header(trajectory_number, name, accepted_design_count, requested_designs, worker_label, autotuned), flush=True)
-        if not campaign_progress.claim_recipe(identity):
+        trajectory_directory = os.path.join(trajectories_dir, name)
+        if not claimed_trajectory_directory(trajectory_directory):
             print(trajectory_already_designed(name), flush=True)
             continue
-        trajectory_directory = os.path.join(trajectories_dir, name)
         trajectory_length = padded_prediction_length(drawn['binder_length'], campaign_length_bucket(settings))
         compiled_fresh = trajectory_length not in compiled_length_buckets
         compiled_length_buckets.add(trajectory_length)
