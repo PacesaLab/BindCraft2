@@ -1,5 +1,7 @@
 import copy
-import fcntl
+import platform
+import threading
+import time
 import hashlib
 import os
 from contextlib import contextmanager
@@ -15,17 +17,73 @@ from bindcraft.loss import DesignLoss, chain_residue_slices, frozen_interface_ar
 from bindcraft.sequence_optimization import sequence_features_from_logits
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
 
+COMPILE_LOCK_HEARTBEAT_SECONDS = 30.0
+COMPILE_LOCK_STALE_SECONDS = 120.0
+COMPILE_LOCK_PATIENCE_SECONDS = 600.0
+
+def compile_lock_owner_is_gone(lock_path: str) -> bool:
+    try:
+        node, pid = open(lock_path).read().split()[:2]
+    except (OSError, ValueError):
+        return False
+    if node != platform.node():
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return True
+    except (OSError, ValueError):
+        return False
+    return False
+
 @contextmanager
-def one_worker_compiles(compile_shape: tuple):
+def one_worker_compiles(compile_shape: tuple, blocking: bool=True):
     cache_directory = os.environ.get('JAX_COMPILATION_CACHE_DIR')
     if not cache_directory:
-        yield
+        yield True
         return
     os.makedirs(cache_directory, exist_ok=True)
     shape_digest = hashlib.sha256(repr(compile_shape).encode()).hexdigest()[:16]
-    with open(os.path.join(cache_directory, f'compile_{shape_digest}.lock'), 'w') as compile_lock:
-        fcntl.flock(compile_lock, fcntl.LOCK_EX)
-        yield
+    lock_path = os.path.join(cache_directory, f'compile_{shape_digest}.lock')
+    waiting_since = time.time()
+    while True:
+        try:
+            lock_handle = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            if not blocking:
+                yield False
+                return
+            if time.time() - waiting_since > COMPILE_LOCK_PATIENCE_SECONDS:
+                print(f'compiling without the lock, {lock_path} has been held for {COMPILE_LOCK_PATIENCE_SECONDS:.0f}s', flush=True)
+                yield True
+                return
+            time.sleep(1.0)
+            try:
+                if compile_lock_owner_is_gone(lock_path) or time.time() - os.path.getmtime(lock_path) > COMPILE_LOCK_STALE_SECONDS:
+                    os.replace(lock_path, f'{lock_path}.stale')
+                    os.unlink(f'{lock_path}.stale')
+            except OSError:
+                pass
+    os.write(lock_handle, f'{platform.node()} {os.getpid()}\n'.encode())
+    finished = threading.Event()
+    def keep_the_lock_alive() -> None:
+        while not finished.wait(COMPILE_LOCK_HEARTBEAT_SECONDS):
+            try:
+                os.utime(lock_path, None)
+            except FileNotFoundError:
+                return
+    heartbeat = threading.Thread(target=keep_the_lock_alive, daemon=True)
+    heartbeat.start()
+    try:
+        yield True
+    finally:
+        finished.set()
+        os.close(lock_handle)
+        try:
+            os.unlink(lock_path)
+        except FileNotFoundError:
+            pass
 
 def align_prediction_to_target_template(predicted_atom_positions: Array, predicted_atom_mask: Array, template_atom_positions: Array, template_atom_mask: Array, flags: Array) -> Array:
     ca_atom_index = ATOM_INDEX['CA']
@@ -445,7 +503,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         attention_backend = self.shape_attention_backend.get(shape_signature, self.attention_backend)
         compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses)))):
+        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses)))) as compiling:
             executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
             if shape_signature not in self.shape_attention_backend:
                 self.shape_attention_backend[shape_signature] = attention_backend
