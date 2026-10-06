@@ -208,7 +208,7 @@ Detargeting only checks the off-targets supplied. Use `targets[].objective: "det
 
 | Setting | Default | Why change it |
 | --- | --- | --- |
-| `initial_guess` / `--initial-guess` | false | Start the re-prediction of each redesigned candidate from the pose the trajectory folded. The gradient stages are untouched, and a binder folded from nothing reaches it the same way a scaffold does, because ProteinMPNN decodes onto the predicted backbone. Measured on 17 matched candidates it raised binder pLDDT on every one and left interface pTM and pAE flat to slightly worse, so it is off by default. Rungs 1, 3 and 5 to 7 of the [desperation ladder](#the-desperation-ladder) turn it on. |
+| `hard_target` / `--hard-target` | false | Start the re-prediction of each redesigned candidate from the pose the trajectory folded. The gradient stages are untouched, and a binder folded from nothing reaches it the same way a scaffold does, because ProteinMPNN decodes onto the predicted backbone. Measured on 17 matched candidates it raised binder pLDDT on every one and left interface pTM and pAE flat to slightly worse, so it is off by default. Rungs 1, 3 and 5 to 7 of the [desperation ladder](#the-desperation-ladder) turn it on. |
 | `bigbang` / `--bigbang` | false | Property flag that sets `bigbang_initialization`. |
 | `bigbang_initialization` | false | Also start the gradient stages from the coordinates on hand, so the target begins folded in its own frame while a binder folded from nothing still springs from the origin. Measured to cost a campaign: 20 of 20 trajectories died at screen at a binder pLDDT of 0.56 to 0.59 where flexibility alone put 5 of 6 past screen at 0.81, and seeding a VHH trajectory, which does have coordinates to start from, lost pLDDT and interface pTM on 6 of 6. Not on the desperation ladder, and not changed by the autotuner. |
 | `target_flexibility` | 0 | Fraction of templated target residues whose sequence and sidechain information are withheld, while retaining their backbone. Increase only when target-side flexibility is part of the experiment. |
@@ -404,7 +404,7 @@ Off-target stage ceilings use `max_detarget_iptm_<stage>`, and acceptance reject
 | `desperation_trajectories` | 750 | Trajectories since the last accepted design before the first rung of that ladder is taken. |
 | `parameter_sweep` | Absent | Compare controlled variants of selected settings; `true` uses default axes, or supply the object below. |
 
-The autotuner reviews blocks of ten trajectories and moves two things only: the screen and refine stage lengths, each held between half and twice the length the campaign configured, and, where `autotune_loss_weights` is set, the `weights_*` the campaign changed itself. An alternated weight returns to the campaign's own value as soon as a design is accepted. The autotuner never touches recycles, target flexibility, the validation pool, `initial_guess` or `bigbang_initialization`. Its values live in `.campaign_state.json`, and each trajectory's `autotuned` column records what had been moved when it ran.
+The autotuner reviews blocks of ten trajectories and moves two things only: the screen and refine stage lengths, each held between half and twice the length the campaign configured, and, where `autotune_loss_weights` is set, the `weights_*` the campaign changed itself. An alternated weight returns to the campaign's own value as soon as a design is accepted. The autotuner never touches recycles, target flexibility, the validation pool, `hard_target` or `bigbang_initialization`. Its values live in `.campaign_state.json`, and each trajectory's `autotuned` column records what had been moved when it ran.
 
 ### The desperation ladder
 
@@ -412,17 +412,17 @@ The autotuner reviews blocks of ten trajectories and moves two things only: the 
 
 | Rung | Runs at |
 | --- | --- |
-| 1 | `initial_guess` |
+| 1 | `hard_target` |
 | 2 | `target_flexibility` 0.5 |
-| 3 | `initial_guess`, `target_flexibility` 0.5 |
+| 3 | `hard_target`, `target_flexibility` 0.5 |
 | 4 | `validation_model` `multimer` |
-| 5 | `validation_model` `multimer`, `initial_guess` |
-| 6 | `validation_model` `multimer`, `initial_guess`, `target_flexibility` 0.5 |
-| 7 | `validation_model` `multimer`, `initial_guess`, `target_flexibility` 0.5, `design_recycles` 3 |
+| 5 | `validation_model` `multimer`, `hard_target` |
+| 6 | `validation_model` `multimer`, `hard_target`, `target_flexibility` 0.5 |
+| 7 | `validation_model` `multimer`, `hard_target`, `target_flexibility` 0.5, `design_recycles` 3 |
 
-The initial guess and the flexibility are tried alone before they are tried together, so a rung that works says which change bought the design. Rungs 4 to 6 move validation off the held-back monomer models onto held-out multimer models, splitting the multimer pool 3 to design and 2 to validate, for a target whose interface the monomer models cannot resolve. More recycles come last because they cost only time; a campaign that already asks for more than three keeps its own count. The rung is read off the campaign's own tables, so every worker and a resumed campaign stand on the same one, and a `trajectory_only` campaign never climbs at all.
+The hard target and the flexibility are tried alone before they are tried together, so a rung that works says which change bought the design. Rungs 4 to 6 move validation off the held-back monomer models onto held-out multimer models, splitting the multimer pool 3 to design and 2 to validate, for a target whose interface the monomer models cannot resolve. More recycles come last because they cost only time; a campaign that already asks for more than three keeps its own count. The rung is read off the campaign's own tables, so every worker and a resumed campaign stand on the same one, and a `trajectory_only` campaign never climbs at all.
 
-**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the initial guess reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
+**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the hard target reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
 
 ```json
 {

@@ -55,7 +55,7 @@ Older campaigns with flat `trajectories.csv`, `candidates.csv`, `accepted.csv`, 
 | `terminated` | Stage at which gradient design stopped. Blank means it completed, not that ProteinMPNN accepted a sequence. |
 | `outcome` | Candidate `passed` or `rejected`; passing candidates may still fall outside `kept_sequences`. |
 | `failed_filters` | Comma-separated failed checks, including a target suffix where relevant. “not measured” is different from a low score. |
-| `autotuned` | Settings that differed from the campaign's own when that attempt ran, from the autotuner and from the [desperation ladder](reference.md#the-desperation-ladder) alike. An entry naming `initial_guess`, `target_flexibility`, `validation_model` or a raised `design_recycles` means the attempt ran on a rung of that ladder, against an easier task than the campaign asked for. |
+| `autotuned` | Settings that differed from the campaign's own when that attempt ran, from the autotuner and from the [desperation ladder](reference.md#the-desperation-ladder) alike. An entry naming `hard_target`, `target_flexibility`, `validation_model` or a raised `design_recycles` means the attempt ran on a rung of that ladder, against an easier task than the campaign asked for. |
 | `rank` | Position in that particular ranking, not a probability of experimental success. |
 | `targets`, `target_weights` | Target names and weights in the order used by multi-target metric cells. |
 | `Binder_Sequence` | One-letter sequence, with `/` between binder chains. |
