@@ -87,7 +87,7 @@ def prepare_multitarget_redesign(target_states: ProteinStates, binder: str, keep
 def ensemble_mean_predictions(protein_states: ProteinStates, model_predictions: dict[str, StructurePredictions]) -> StructurePredictions:
     predictions: StructurePredictions = {}
     for name in protein_states:
-        metric_names = {metric_name for model_outputs in model_predictions.values() for metric_name in model_outputs[name].metrics}
+        metric_names = {metric_name for model_outputs in model_predictions.values() for metric_name in model_outputs[name].metrics} - DESIGN_ONLY_METRICS
         metrics = {}
         for metric_name in metric_names:
             values = [model_outputs[name].metrics[metric_name] for model_outputs in model_predictions.values() if metric_name in model_outputs[name].metrics]
@@ -95,6 +95,7 @@ def ensemble_mean_predictions(protein_states: ProteinStates, model_predictions: 
         predictions[name] = StructurePrediction(protein_complex=next(iter(model_predictions.values()))[name].protein_complex, metrics=metrics)
     return predictions
 
+DESIGN_ONLY_METRICS = frozenset({'distogram', 'iptm_per_residue', 'experimentally_resolved_ca'})
 REACHABLE_CONFIDENCE_BOUNDS = {'plddt': (0.0, 1.0), 'ptm': (0.0, 1.0), 'iptm': (0.0, 1.0), 'pae': (0.0, 0.0)}
 
 def best_reachable_ensemble(model_predictions: dict[str, StructurePredictions], model_count: int, higher: bool) -> StructurePredictions:
@@ -102,7 +103,7 @@ def best_reachable_ensemble(model_predictions: dict[str, StructurePredictions], 
     predictions: StructurePredictions = {}
     for name in folded[0]:
         metrics = {}
-        for metric_name in {metric_name for model_outputs in folded for metric_name in model_outputs[name].metrics}:
+        for metric_name in {metric_name for model_outputs in folded for metric_name in model_outputs[name].metrics} - DESIGN_ONLY_METRICS:
             values = [model_outputs[name].metrics[metric_name] for model_outputs in folded if metric_name in model_outputs[name].metrics]
             bounds = REACHABLE_CONFIDENCE_BOUNDS.get(metric_name)
             best = (bounds[1] if higher else bounds[0]) if bounds else sum(values) / len(values)
