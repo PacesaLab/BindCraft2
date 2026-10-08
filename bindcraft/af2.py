@@ -291,7 +291,7 @@ def resolve_subbatch_size(residue_count: int, subbatch_size: int | None | str='a
     return LARGE_COMPLEX_SUBBATCH_SIZE if residue_count > SUBBATCH_RESIDUE_THRESHOLD else None
 
 class AlphaFoldDesignModel(DifferentiableProteinPredictor):
-    def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, bigbang_initialization: bool=False, amino_acid_bias: dict[str, float] | None=None):
+    def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, use_remat: bool=True, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, bigbang_initialization: bool=False, amino_acid_bias: dict[str, float] | None=None):
         self.cyclic_offset_mode = cyclic_offset_mode
         self.target_pad_length = target_pad_length
         self.multi_chain_binders = multi_chain_binders
@@ -309,6 +309,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         self.length_bucket_size = length_bucket_size
         self.attention_backend = accel.supported_attention_backend(attention_backend)
         self.use_cueq = use_cueq
+        self.use_remat = use_remat
         self.model_families: dict[str, tuple] = {}
         self.model_family_models: dict[tuple, str] = {}
         self.alphafold_runners: dict[tuple, af_model.RunModel] = {}
@@ -331,14 +332,14 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
 
     def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None, attention_backend: str | None=None) -> af_model.RunModel:
         attention_backend = attention_backend or self.attention_backend
-        runner_key = model_family, subbatch_size, attention_backend, self.use_cueq
+        runner_key = model_family, subbatch_size, attention_backend, self.use_cueq, self.use_remat
         alphafold_runner = self.alphafold_runners.get(runner_key)
         if alphafold_runner is None:
             model_name = self.model_family_models[model_family]
             use_multimer = 'multimer' in model_name
             model_config = copy.deepcopy(af_config.model_config(model_name))
             model_config.model.global_config.use_dgram = False
-            model_config.model.global_config.use_remat = os.environ.get('BC2_USE_REMAT', '1') != '0'
+            model_config.model.global_config.use_remat = self.use_remat
             model_config.model.global_config.bfloat16 = True
             model_config.model.global_config.subbatch_size = subbatch_size
             model_config.model.global_config.attention_backend = attention_backend
