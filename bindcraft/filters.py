@@ -563,7 +563,7 @@ def domain_separation_ratio_metric(protein_states: ProteinStates, predictions: S
     return min(float(np.linalg.norm(centroids[index] - centroids[index + 1])) / (radii[index] + radii[index + 1] + 1e-08) for index in range(len(domains) - 1))
 
 @filter_metric('Binder_Chain_Breaks')
-def binder_chain_breaks_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', minimum_bond: float=3.3, maximum_bond: float=4.3) -> float | None:
+def binder_chain_breaks_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', maximum_bond: float=4.3) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     breaks = None
     for chain in binder_copy_chains(protein_states[prediction_state], binder):
@@ -574,7 +574,7 @@ def binder_chain_breaks_metric(protein_states: ProteinStates, predictions: Struc
         if not bonded.any():
             continue
         bond_lengths = np.linalg.norm(coordinates[1:] - coordinates[:-1], axis=-1)
-        breaks = (breaks or 0.0) + float((bonded & ((bond_lengths < minimum_bond) | (bond_lengths > maximum_bond))).sum())
+        breaks = (breaks or 0.0) + float((bonded & (bond_lengths > maximum_bond)).sum())
     return breaks
 
 def protomer_identity_fraction(protein_complex: dict[str, Protein], binder: str) -> float | None:
