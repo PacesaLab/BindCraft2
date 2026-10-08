@@ -22,6 +22,7 @@
     "campaign_name": null,
     "campaign_seed": null,
     "compile_next_length": null,
+    "confidence_floor": 0.7,
     "copies": null,
     "crop_fasta_sequence": null,
     "cyclic_offset_mode": null,
