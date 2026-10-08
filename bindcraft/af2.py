@@ -338,7 +338,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             use_multimer = 'multimer' in model_name
             model_config = copy.deepcopy(af_config.model_config(model_name))
             model_config.model.global_config.use_dgram = False
-            model_config.model.global_config.use_remat = True
+            model_config.model.global_config.use_remat = os.environ.get('BC2_USE_REMAT', '1') != '0'
             model_config.model.global_config.bfloat16 = True
             model_config.model.global_config.subbatch_size = subbatch_size
             model_config.model.global_config.attention_backend = attention_backend
