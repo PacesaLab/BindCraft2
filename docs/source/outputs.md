@@ -105,6 +105,7 @@ Most biological measurements are recorded automatically only when relevant; othe
 | `Interface_Residues_detarget` | The same count for a selected off-target. |
 | `Interface_<X>_Count` | Contacting binder residues of amino acid X. All 20 one-letter names are available: A,C,D,E,F,G,H,I,K,L,M,N,P,Q,R,S,T,V,W,Y. |
 | `Interface_BuriedArea` | Binder-side loss of solvent-accessible area upon complex formation, Å²; not the sum of both partners' buried areas. |
+| `Interface_BuriedArea_Fraction` | The same buried area as a fraction of the free binder's total accessible area; 0–1. |
 | `Surface_Hydrophobicity` | Fraction of solvent-exposed residues of the free binder that are hydrophobic (A,C,V,I,L,M,F,W,Y). Exposure uses relative SASA ≥0.2. |
 | `Backbone_Clashes` | Interchain CA atom pairs within 2.5 Å. It is not an all-backbone or all-atom clash count. |
 | `All_Atom_Clashes` | Interchain atom pairs within 2.5 Å. Intrachain clashes are not included. |
@@ -125,6 +126,7 @@ Most biological measurements are recorded automatically only when relevant; othe
 
 | Measurement | What it measures / how to use it |
 | --- | --- |
+| `Target_RMSD` | CA RMSD between the predicted target chain and the target as supplied, Å; a check that the target did not move, not a binder measurement. |
 | `Hotspot_Contact_Fraction` | Fraction of named target hotspots contacted by the binder, 0–1. |
 | `Coldspot_Contact_Fraction` | Fraction of named coldspots contacted, 0–1; lower is better for avoidance. |
 | `Off_Paratope_Contact_Fraction` | Fraction of contacting binder residues outside the designated paratope, 0–1. |
