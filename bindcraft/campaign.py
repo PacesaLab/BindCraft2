@@ -262,6 +262,7 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     subbatch_size = campaign_subbatch_size(settings, design_residue_count(settings))
     attention_backend = settings.get('attention_backend', 'auto')
     use_cueq = bool(settings.get('use_cueq', False))
+    use_remat = bool(settings.get('use_remat', True))
     length_bucket_size = campaign_length_bucket(settings)
     design_settings = build_design_settings(settings)
     if speaks_for_the_campaign():
@@ -271,7 +272,7 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     alphafold_model = campaign_design_model(design_plan, selected_models.design_models, af2_weights, settings)
     refuse_predictor_without_distogram(settings, alphafold_model)
     mpnn_model = ProteinMPNNSequenceModel(data_dir=mpnn_weights, max_cache_size=16, model_name=settings.get('mpnn_model', 'v_48_020'), variant=settings.get('mpnn_variant', 'negative'), omitted_amino_acids=design_settings.binder.omitted_amino_acids, amino_acid_bias=design_settings.binder.amino_acid_bias, multi_chain_binders=multi_chain_binders, length_bucket_size=length_bucket_size, target_pad_length=target_pad_length) if mpnn_weights and (not settings.get('trajectory_only')) else None
-    build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
+    build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, use_remat=use_remat, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
     validation_model = build_validation_model(selected_models.validation_models) if mpnn_model else None
     if mpnn_model is None and max_trajectories is None:
         max_trajectories = DEFAULT_TRAJECTORY_ONLY_BUDGET
@@ -314,6 +315,7 @@ class CampaignDesignPlan:
     subbatch_size: int | None | str
     attention_backend: str
     use_cueq: bool
+    use_remat: bool
     length_bucket_size: int
     multi_chain_binders: tuple
     target_pad_length: int
@@ -326,6 +328,7 @@ def campaign_design_plan(settings: dict) -> CampaignDesignPlan:
                               subbatch_size=campaign_subbatch_size(settings, design_residue_count(settings)),
                               attention_backend=settings.get('attention_backend', 'auto'),
                               use_cueq=bool(settings.get('use_cueq', False)),
+                              use_remat=bool(settings.get('use_remat', True)),
                               length_bucket_size=length_bucket_size,
                               multi_chain_binders=(design_settings.binder_chains,) if design_settings.binder.copies > 1 and design_settings.oligomer_tie == 'symmetric' else (),
                               target_pad_length=padded_prediction_length(max(target_lengths), length_bucket_size) if len(target_lengths) > 1 else 0)
@@ -335,7 +338,7 @@ def campaign_design_model(design_plan: CampaignDesignPlan, design_models, af2_we
                                 num_recycle=settings.get('design_recycles', DEFAULT_SETTINGS['design_recycles']),
                                 models=design_models, cyclic_offset_mode=resolve_cyclic_offset_mode(settings),
                                 subbatch_size=design_plan.subbatch_size, attention_backend=design_plan.attention_backend,
-                                use_cueq=design_plan.use_cueq, length_bucket_size=design_plan.length_bucket_size,
+                                use_cueq=design_plan.use_cueq, use_remat=design_plan.use_remat, length_bucket_size=design_plan.length_bucket_size,
                                 multi_chain_binders=design_plan.multi_chain_binders,
                                 target_pad_length=design_plan.target_pad_length,
                                 amino_acid_bias=design_plan.design_settings.binder.amino_acid_bias)
