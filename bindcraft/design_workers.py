@@ -45,12 +45,13 @@ def visible_design_gpus() -> list[str]:
     except OSError:
         return []
 
-def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
+def selected_design_gpus(gpu_ids: str | int | list | None=None) -> list[str]:
     gpus = visible_design_gpus()
     if gpu_ids in (None, '', 'all'):
         return gpus
+    named = gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids if isinstance(gpu_ids, (list, tuple)) else [gpu_ids]
     aliases = {str(ordinal): uuid for ordinal, uuid in enumerate(gpus)} | {uuid: uuid for uuid in gpus}
-    requested = [str(device).strip() for device in (gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids) if str(device).strip()]
+    requested = [str(device).strip() for device in named if str(device).strip()]
     missing = [device for device in requested if device not in aliases]
     if missing:
         raise ValueError(f'requested GPUs {missing} are not visible to this process')
