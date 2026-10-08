@@ -109,7 +109,7 @@ Most biological measurements are recorded automatically only when relevant; othe
 | `Surface_Hydrophobicity` | Fraction of solvent-exposed residues of the free binder that are hydrophobic (A,C,V,I,L,M,F,W,Y). Exposure uses relative SASA ≥0.2. |
 | `Backbone_Clashes` | Interchain CA atom pairs within 2.5 Å. It is not an all-backbone or all-atom clash count. |
 | `All_Atom_Clashes` | Interchain atom pairs within 2.5 Å. Intrachain clashes are not included. |
-| `Binder_Chain_Breaks` | Consecutive CA distances outside 3.3–4.3 Å within binder chains. |
+| `Binder_Chain_Breaks` | Consecutive CA distances above 4.3 Å within binder chains, which is a gap in the backbone; a cis peptide bond sits near 2.9 Å and is not counted. |
 | `Binder_Helix_Fraction`, `Binder_BetaSheet_Fraction`, `Binder_Loop_Fraction` | Fractions of binder residues assigned helix, sheet or other by secondary-structure analysis; 0–1. |
 | `Binder_Length` | Total residues over the binder assembly; includes each oligomer copy. |
 | `Binder_Mass_kDa` | Sequence-derived molecular mass of the binder assembly, kDa. Does not include unmodelled modifications. |
