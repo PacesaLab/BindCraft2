@@ -6,6 +6,7 @@ import json
 import csv
 import math
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -34,6 +35,10 @@ ACCEPTED_FILENAME = 'accepted.csv'
 LEGACY_STAGE_TABLES = {TRAJECTORY_STAGE: 'trajectories.csv', REFOLD_STAGE: 'candidates.csv', RANK_STAGE: 'ranked.csv'}
 LEGACY_STAGE_FOLDERS = {TRAJECTORY_STAGE: 'trajectories', REFOLD_STAGE: 'refolded', RANK_STAGE: 'accepted'}
 STRUCTURE_SUFFIXES = ('.cif', '.pdb', '.mmcif', '.ent')
+RELAXED_FOLDER = 'relaxed'
+RANK_PREFIX = 'rank'
+RANK_PREFIX_WIDTH = 3
+RANK_PREFIX_PATTERN = re.compile(rf'^{RANK_PREFIX}\d+_')
 SCORED_FILENAME = 'scored.csv'
 CONFIDENCE_METRIC = 'Binder_pLDDT'
 RANKING_METRIC = 'i_pDAE'
@@ -449,18 +454,45 @@ def ranking_value(row: dict, metric: str) -> float:
     value = on_target_mean(row, metric)
     return -math.inf if value is None else value
 
+def rank_prefixed_name(rank: int, stem: str) -> str:
+    return f'{RANK_PREFIX}{rank:0{RANK_PREFIX_WIDTH}d}_{stem}'
+
+def unranked_name(name: str) -> str:
+    return RANK_PREFIX_PATTERN.sub('', name, count=1)
+
+def check_file_belongs_to_design(path: Path, design: str) -> bool:
+    stem = unranked_name(path.stem)
+    return stem == design or stem.startswith(f'{design}_')
+
 def accepted_structure_present(rank_folder: str, design: str) -> bool:
-    written = list(Path(rank_folder).glob(f'{design}.cif')) + list(Path(rank_folder).glob(f'{design}_*.cif'))
-    return any(not path.name.endswith('_monomer.cif') for path in written)
+    written = [path for path in Path(folder).iterdir() if path.is_file() and check_file_belongs_to_design(path, design) and path.suffix.lower() == '.cif']
+    return any(not unranked_name(path.name).endswith('_monomer.cif') for path in written)
+
+def rename_ranked_structures(rank_folder: str, ranked_rows: list[dict]) -> None:
+    #a target name carries the design's own name, which is unique, so no two designs contend for one name
+    ranks = {row['design']: int(row['rank']) for row in ranked_rows if row.get('design')}
+    for folder in (rank_folder, os.path.join(rank_folder, RELAXED_FOLDER)):
+        if not os.path.isdir(folder):
+            continue
+        for path in sorted(Path(folder).iterdir()):
+            if not path.is_file():
+                continue
+            design_name = [name for name in ranks if check_file_belongs_to_design(path, name)]
+            if len(design_name) > 1:
+                raise ValueError(f"{path.name} could belong to {' or '.join(design_name)}, so it cannot be named by rank; accepted designs are meant to carry names no other design extends")
+            #a design dropped at reconcile keeps its files but gives up the rank it no longer holds
+            wanted = path.with_name(rank_prefixed_name(ranks[design_name[0]], unranked_name(path.name)) if design_name else unranked_name(path.name))
+            if wanted != path:
+                os.replace(path, wanted)
 
 def write_ranked_designs(project_folder: str, metric: str, reconcile: bool=False) -> str | None:
-    accepted_rows = read_metric_rows(accepted_table(project_folder))
+    accepted_rows, rank_folder = read_metric_rows(accepted_table(project_folder)), stage_folder(project_folder, RANK_STAGE)
     if reconcile:
-        rank_folder = stage_folder(project_folder, RANK_STAGE)
         accepted_rows = [row for row in accepted_rows if accepted_structure_present(rank_folder, row.get('design', ''))]
     if not accepted_rows:
         return None
     ranked_rows = [{**row, 'rank': rank} for rank, row in enumerate(sorted(accepted_rows, key=lambda row: -ranking_value(row, metric)), start=1)]
+    rename_ranked_structures(rank_folder, ranked_rows)
     return write_csv_rows(ranked_rows, stage_table(project_folder, RANK_STAGE), ordered_csv_columns(ranked_rows[0]))
 
 def rank_accepted_designs(project_folder: str, metric: str=RANKING_METRIC) -> str | None:
