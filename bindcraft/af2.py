@@ -410,7 +410,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             seq_mask = jnp.pad(seq_mask, [0, padding_length])
         compiled_prediction = self._compiled_complex_prediction(model, padded_residue_count)
         prediction_arguments = (self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        prediction_shape = (self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.bigbang_initialization)
+        prediction_shape = (self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.large_complex_initialization)
         if prediction_shape not in self.compiled_shapes:
             with one_worker_compiles(prediction_shape, compile_blocking) as compiling:
                 if compiling:
