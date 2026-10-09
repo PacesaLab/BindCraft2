@@ -18,8 +18,9 @@ DEFAULT_IDR_CROP_LENGTHS = 10, 40
 DEFAULT_VALIDATION_CROP_FLANK = 5
 DEFAULT_VALIDATION_MODEL_COUNT = 2
 MULTIMER_MODEL_POOL = tuple(f'model_{index}_multimer_v3' for index in range(1, 6))
-DEFAULT_INDUCED_FIT_INTERFACE_RMSD = 5.0
-DEFAULT_INDUCED_FIT_TM_TARGET = 0.6
+DEFAULT_INDUCED_FIT_INTERFACE_RMSD = 2.0
+DEFAULT_INDUCED_FIT_TM_FINAL = 0.85
+DEFAULT_FOLD_SWITCH_RMSD = 1.0
 DEFAULT_DISORDERED_TARGET_PLDDT = 0.6
 DEFAULT_DETARGET_INTERFACE_RESIDUES = 3
 #an off-target sits between the binding rounds, as the multitargeting work it comes from does, so the repulsion it carries is applied all through a stage
@@ -30,10 +31,10 @@ def is_fasta(path) -> bool:
 
 def has_fasta_target(settings: dict) -> bool:
     return any(is_fasta(target.get('target_path')) for target in settings.get('targets', []))
-LOSS_PARAMETERS = {'interface_contact_distance': ('interface_contacts', 'cutoff'), 'non_contact_distance': ('non_contact', 'cutoff'), 'termini_distance_threshold': ('termini_distance', 'threshold_distance'), 'disulfide_distance': ('disulfide', 'distance'), 'disulfide_sigma': ('disulfide', 'sigma'), 'disulfide_sequence_separation': ('disulfide', 'sequence_separation'), 'disulfide_temperature': ('disulfide', 'temperature'), 'induced_fit_delta': ('induced_fit_interface', 'interface_rmsd_target'), 'induced_fit_interface_cutoff': ('induced_fit_interface', 'cutoff'), 'induced_fit_tm_target': ('induced_fit_global', 'tm_target'), 'humanization_species': ('humanization', 'species'), 'humanization_coupling_weight': ('humanization', 'coupling_weight'), 'humanization_hydro_weight': ('humanization', 'hydrophobicity_weight'), 'humanization_mhc2_weight': ('humanization', 'mhc_class_ii_weight'), 'exposed_loops_measure': ('exposed_loops', 'measure'), 'exposed_loops_distinguish_sheets': ('exposed_loops', 'distinguish_sheets')}
+LOSS_PARAMETERS = {'interface_contact_distance': ('interface_contacts', 'cutoff'), 'non_contact_distance': ('non_contact', 'cutoff'), 'termini_distance_threshold': ('termini_distance', 'threshold_distance'), 'disulfide_distance': ('disulfide', 'distance'), 'disulfide_sigma': ('disulfide', 'sigma'), 'disulfide_sequence_separation': ('disulfide', 'sequence_separation'), 'disulfide_temperature': ('disulfide', 'temperature'), 'induced_fit_delta': ('induced_fit_interface', 'interface_rmsd_target'), 'induced_fit_interface_cutoff': ('induced_fit_interface', 'cutoff'), 'induced_fit_tm_target': ('fold_switching', 'tm_target'), 'fold_switch_delta': ('fold_switching', 'rmsd_target'), 'humanization_species': ('humanization', 'species'), 'humanization_coupling_weight': ('humanization', 'coupling_weight'), 'humanization_hydro_weight': ('humanization', 'hydrophobicity_weight'), 'humanization_mhc2_weight': ('humanization', 'mhc_class_ii_weight'), 'exposed_loops_measure': ('exposed_loops', 'measure'), 'exposed_loops_distinguish_sheets': ('exposed_loops', 'distinguish_sheets')}
 DOMAIN_PARAMETERS = 'n_domains', 'min_domain_size', 'max_domain_size', 'max_domains', 'domain_rg_weight', 'domain_sep_weight', 'domain_contact_cutoff', 'domain_pae_margin', 'domain_linker_gap', 'domain_linker_sharpness', 'domain_linker_helix_weight'
 DESIGN_STAGE_NAMES = 'screen', 'refine', 'anneal', 'harden', 'mutate', 'final'
-CAMPAIGN_SETTING_NAMES = frozenset({'aa_bias', 'archive_trajectories', 'attention_backend', 'auto_multi_gpu', 'autotune', 'autotune_loss_weights', 'betasheet_reopt_extra_anneal_steps', 'betasheet_reopt_extra_refine_steps', 'betasheet_reopt_recycles', 'betasheet_reopt_trigger', 'binder_chain', 'binder_lengths', 'binder_name', 'binder_scaffold', 'binder_shapes', 'campaign_name', 'campaign_seed', 'compile_next_length', 'copies', 'crop_fasta_sequence', 'cyclic_offset_mode', 'cyclize_peptide', 'design_dropout', 'design_models', 'design_recycles', 'design_workers', 'desperation', 'desperation_trajectories', 'detarget_check_interval', 'domain_linker_fix_cut', 'enough_passing_sequences', 'filters', 'forced_targeting', 'forced_targeting_shell', 'gpu_ids', 'hard_target', 'hash_design_names','idr_crop_count', 'induced_fit_monomer_adaptive', 'induced_fit_monomer_chunk', 'induced_fit_monomer_plddt', 'induced_fit_monomer_steps', 'induced_fit_mpnn_designed_share', 'induced_fit_mpnn_shell', 'induced_fit_mpnn_threshold', 'induced_fit_steps', 'kept_sequences', 'length_bucket_size', 'losses', 'max_binder_chain_breaks_final', 'max_binder_free_cysteines_final', 'max_coldspot_contact_final', 'max_cyclic_closure_distance_final', 'max_detarget_interface_residues_final', 'max_detarget_iptm', 'max_detarget_rounds', 'max_exposed_loop_fraction_final', 'max_helix_fraction_final', 'max_induced_fit_tm_final', 'max_interdomain_contact_final', 'max_mhc_anchor_score_final', 'max_off_epitope_contact_final', 'max_off_paratope_contact_final', 'max_oligomer_symmetry_rmsd_final', 'max_protease_site_score_final', 'max_scaffold_framework_rmsd_final', 'max_surface_hydrophobicity_final', 'max_termini_distance_final', 'max_terminus_exposure_final', 'max_trajectories', 'max_workers_per_gpu', 'min_binder_disulfides_final', 'min_domain_separation_ratio_final', 'min_epitope_residues_contacted_final', 'min_framework_packing_final', 'min_hotspot_contact_final', 'min_induced_fit_interface_rmsd_final', 'min_interface_buried_area_final', 'min_receptor_chains_contacted_final', 'min_scaffold_sequence_retained_final', 'min_target_crop_length_final', 'min_target_plddt_final', 'min_termini_away_cosine_final', 'mpnn_fix_linker', 'mpnn_model', 'mpnn_variant', 'multitarget_best_round', 'multitarget_cumulative_filter', 'multitarget_filter_models', 'multitarget_merged_gradient_budget', 'multitarget_merged_gradients', 'multitarget_rounds_per_target', 'multitarget_steps', 'multitarget_swap_patience', 'multitarget_swap_threshold', 'multitarget_tied_redesign', 'multitarget_warmup_patience', 'mutate_positions', 'number_of_final_designs', 'oligomer_tie', 'parameter_sweep', 'project_folder', 'redesign_interface', 'relax_accepted_designs', 'relax_learning_rate', 'relax_min_sep', 'relax_overlap_tol', 'relax_restraint_backbone', 'relax_restraint_sidechain', 'relax_steps', 'relax_weight_bond', 'relax_weight_clash', 'resume', 'save_binder_monomers', 'save_design_animations', 'save_design_frames', 'save_design_trajectory', 'save_design_sequences', 'save_failed_refolds', 'save_failed_trajectories', 'save_loss_plots', 'sequence_candidates', 'sparse_output', 'subbatch_size', 'target_chain', 'targets', 'trajectory_only', 'use_cueq', 'validation_crop_flank', 'validation_model', 'validation_models', 'validation_recycles', 'worker_launch_stagger', 'workers_per_gpu'})
+CAMPAIGN_SETTING_NAMES = frozenset({'aa_bias', 'archive_trajectories', 'attention_backend', 'auto_multi_gpu', 'autotune', 'autotune_loss_weights', 'betasheet_reopt_extra_anneal_steps', 'betasheet_reopt_extra_refine_steps', 'betasheet_reopt_recycles', 'betasheet_reopt_trigger', 'binder_chain', 'binder_lengths', 'binder_name', 'binder_scaffold', 'binder_shapes', 'campaign_name', 'campaign_seed', 'compile_next_length', 'copies', 'crop_fasta_sequence', 'cyclic_offset_mode', 'cyclize_peptide', 'design_dropout', 'design_models', 'design_recycles', 'design_workers', 'desperation', 'desperation_trajectories', 'detarget_check_interval', 'domain_linker_fix_cut', 'enough_passing_sequences', 'filters', 'forced_targeting', 'forced_targeting_shell', 'gpu_ids', 'hard_target', 'hash_design_names', 'idr_crop_count', 'induced_fit_monomer_adaptive', 'induced_fit_monomer_chunk', 'induced_fit_monomer_plddt', 'induced_fit_monomer_steps', 'induced_fit_mpnn_designed_share', 'induced_fit_mpnn_shell', 'induced_fit_mpnn_threshold', 'induced_fit_steps', 'kept_sequences', 'length_bucket_size', 'losses', 'max_binder_chain_breaks_final', 'max_binder_free_cysteines_final', 'max_coldspot_contact_final', 'max_cyclic_closure_distance_final', 'max_detarget_interface_residues_final', 'max_detarget_iptm', 'max_detarget_rounds', 'max_exposed_loop_fraction_final', 'max_helix_fraction_final', 'max_induced_fit_tm_final', 'max_interdomain_contact_final', 'max_mhc_anchor_score_final', 'max_off_epitope_contact_final', 'max_off_paratope_contact_final', 'max_oligomer_symmetry_rmsd_final', 'max_protease_site_score_final', 'max_scaffold_framework_rmsd_final', 'max_surface_hydrophobicity_final', 'max_termini_distance_final', 'max_terminus_exposure_final', 'max_trajectories', 'max_workers_per_gpu', 'min_binder_disulfides_final', 'min_domain_separation_ratio_final', 'min_epitope_residues_contacted_final', 'min_framework_packing_final', 'min_hotspot_contact_final', 'min_induced_fit_interface_rmsd_final', 'min_induced_fit_rmsd_final', 'min_interface_buried_area_final', 'min_receptor_chains_contacted_final', 'min_scaffold_sequence_retained_final', 'min_target_crop_length_final', 'min_target_plddt_final', 'min_termini_away_cosine_final', 'mpnn_fix_linker', 'mpnn_model', 'mpnn_variant', 'multitarget_best_round', 'multitarget_cumulative_filter', 'multitarget_filter_models', 'multitarget_merged_gradient_budget', 'multitarget_merged_gradients', 'multitarget_rounds_per_target', 'multitarget_steps', 'multitarget_swap_patience', 'multitarget_swap_threshold', 'multitarget_tied_redesign', 'multitarget_warmup_patience', 'mutate_gate_draws', 'mutate_positions', 'number_of_final_designs', 'oligomer_tie', 'parameter_sweep', 'project_folder', 'redesign_interface', 'relax_accepted_designs', 'relax_learning_rate', 'relax_min_sep', 'relax_overlap_tol', 'relax_restraint_backbone', 'relax_restraint_sidechain', 'relax_steps', 'relax_weight_bond', 'relax_weight_clash', 'resume', 'save_binder_monomers', 'save_design_animations', 'save_design_frames', 'save_design_trajectory', 'save_design_sequences', 'save_failed_refolds', 'save_failed_trajectories', 'save_loss_plots', 'sequence_candidates', 'sparse_output', 'subbatch_size', 'target_chain', 'targets', 'trajectory_only', 'use_cueq', 'use_remat', 'validation_crop_flank', 'validation_model', 'validation_models', 'validation_recycles', 'worker_launch_stagger', 'workers_per_gpu'})
 FINAL_CONFIDENCE_FILTERS = {'min_monomer_plddt_final': 'Unbound_Binder_pLDDT', 'min_ptm_final': 'pTM', 'min_iptm_final': 'i_pTM', 'max_ipae_final': 'i_pAE'}
 TARGET_SETTING_NAMES = frozenset({'name', 'target_path', 'chains', 'hotspots', 'coldspots', 'weight', 'objective'})
 METRIC_ENTRY_NAMES = frozenset({'params', 'prediction_state'})
@@ -231,7 +232,8 @@ def configure_induced_fit(settings: dict, request: ConfigurationRequest) -> None
 
 def configure_fold_switching(settings: dict, request: ConfigurationRequest) -> None:
     if isinstance(settings['filters'], dict):
-        settings['filters'].setdefault('Induced_Fit_TM', {'threshold': settings.get('max_induced_fit_tm_final', settings.get('induced_fit_tm_target', DEFAULT_INDUCED_FIT_TM_TARGET)), 'higher': False})
+        settings['filters'].setdefault('Induced_Fit_TM', {'threshold': settings.get('max_induced_fit_tm_final', DEFAULT_INDUCED_FIT_TM_FINAL), 'higher': False})
+        settings['filters'].setdefault('Induced_Fit_RMSD', {'threshold': settings.get('min_induced_fit_rmsd_final', DEFAULT_FOLD_SWITCH_RMSD), 'higher': True})
 
 def terminus_away_feature(terminus: str) -> 'CampaignFeature':
     return CampaignFeature(f'{terminus} terminus away from the target', lambda settings, terminus=terminus: bool(settings.get(f'weights_{terminus}_terminus_away')),
@@ -300,7 +302,7 @@ CAMPAIGN_FEATURES = (
                     checks=(ModalityCheck('Binder_Helix_Fraction', 1.0, threshold_setting='max_helix_fraction_final'),)),
     CampaignFeature('induced fit', lambda settings: bool(settings.get('weights_induced_fit_interface')), configure=configure_induced_fit,
                     conflicts=(('negative selection', 'induced fit freezes one bound structure to compare a free state against, so it designs against a single target'),)),
-    CampaignFeature('fold switching', lambda settings: bool(settings.get('weights_induced_fit_global')) or bool(settings.get('weights_fold_switching')), configure=configure_fold_switching),
+    CampaignFeature('fold switching', lambda settings: bool(settings.get('weights_fold_switching')), configure=configure_fold_switching),
     CampaignFeature('conformational switching', lambda settings: bool(settings.get('binder_shapes')),
                     note=lambda settings: 'two conformations compared: ' + ' against '.join(('/'.join(group) for group in settings['binder_shapes']))),
 )
@@ -379,11 +381,38 @@ def requested_preset_names(request: dict, tier: str, presets: Path=CAMPAIGN_PRES
     if tier == 'modality':
         named = request.get('modality') or ()
         named = (named,) if isinstance(named, str) else tuple(named)
-        return named if not named or any(name in BINDER_FORMATS for name in named) else ('binder', *named)
+        formats = tuple(name for name in named if name in BINDER_FORMATS) or ('binder',)
+        return tuple(sorted(formats, key=lambda name: MODALITY_PRECEDENCE.get(name, 0))) + tuple(name for name in named if name not in BINDER_FORMATS)
     return tuple(name for name in shipped_preset_names(tier, presets) if request.get(name))
 
+def scaffolded_modality_names(request: dict, presets: Path=CAMPAIGN_PRESETS) -> tuple[str, ...]:
+    return tuple(name for name in requested_preset_names(request, 'modality', presets) if read_preset('modality', name, presets).get('binder_scaffold'))
+
+MODALITY_PRECEDENCE = {'binder': 1, 'homo_oligomer': 2, 'multidomain': 2, 'peptide': 3, 'cyclic_peptide': 3, 'large_binder': 3, 'ARP': 4, 'Fab': 4, 'scFv': 4, 'VHH': 4}
+
+MODALITY_SETTING_OWNERS = {'weights_binder_contacts': 'multidomain'}
+
+INCOMPATIBLE_MODALITIES = (('cyclic_peptide', 'large_binder', 'a macrocycle of 7-20 residues is not a 250-600 residue binder'),
+                           ('cyclic_peptide', 'multidomain', 'a macrocycle of 7-20 residues has no room for two domains'),
+                           ('cyclic_peptide', 'peptide', 'a peptide is either closed head to tail or it is linear'),
+                           ('large_binder', 'peptide', 'a peptide of 12-25 residues is not a 250-600 residue binder'),
+                           ('multidomain', 'peptide', 'a peptide of 12-25 residues has no room for two domains'))
+
+def incompatible_modality_names(request: dict, presets: Path=CAMPAIGN_PRESETS) -> tuple[tuple[str, str, str], ...]:
+    named = set(requested_preset_names(request, 'modality', presets))
+    scaffolded = scaffolded_modality_names(request, presets)
+    refused = [(first, second, reason) for first, second, reason in INCOMPATIBLE_MODALITIES if first in named and second in named]
+    if len(scaffolded) > 1:
+        refused.append((scaffolded[0], scaffolded[1], 'each brings its own framework, and a campaign designs one binder'))
+    return tuple(sorted(refused))
+
+def modality_owner_layer(names: tuple[str, ...], presets: Path=CAMPAIGN_PRESETS) -> list[dict]:
+    owned = {setting: read_preset('modality', owner, presets)[setting] for setting, owner in MODALITY_SETTING_OWNERS.items() if owner in names and any(name != owner and setting in read_preset('modality', name, presets) for name in names)}
+    return [owned] if owned else []
+
 def preset_tier_layers(request: dict, tier: str, presets: Path=CAMPAIGN_PRESETS) -> list[dict]:
-    layers = [read_preset(tier, name, presets) for name in requested_preset_names(request, tier, presets)]
+    names = requested_preset_names(request, tier, presets)
+    layers = [read_preset(tier, name, presets) for name in names] + (modality_owner_layer(names, presets) if tier == 'modality' else [])
     accumulated = [target for layer in layers for target in layer.pop('targets', [])]
     return layers + [{'targets': accumulated}] if accumulated else layers
 
@@ -410,7 +439,7 @@ def known_campaign_settings() -> frozenset[str]:
     return frozenset({'core', 'modality', 'paratope_conformations', 'target'} |set(design_property_names()) | CAMPAIGN_SETTING_NAMES | set(DEFAULT_SETTINGS) | set(FINAL_CONFIDENCE_FILTERS) | set(LOSS_PARAMETERS) | set(DOMAIN_PARAMETERS) | {f'weights_{name}' for name in REGISTERED_LOSSES} | {f'{stage}_steps' for stage in DESIGN_STAGE_NAMES if stage != 'final'} | {f'{filter}_{stage}' for filter in ('min_plddt', 'min_iptm', 'max_detarget_iptm') for stage in DESIGN_STAGE_NAMES} | {f'min_{terminus}_terminus_away_cosine_final' for terminus in ('n', 'c')})
 
 def metric_parameter_names(metric_function) -> frozenset[str]:
-    return frozenset(inspect.signature(metric_function).parameters) - {'protein_states', 'predictions'}
+    return frozenset(inspect.signature(metric_function).parameters) - {'protein_states', 'predictions', 'confidence_floor'}
 
 def unrecognized_setting(name: str, accepted, prefix: str='') -> str:
     nearest = difflib.get_close_matches(name, sorted(accepted), n=1, cutoff=0.6)
@@ -453,6 +482,12 @@ def reject_unrecognized_settings(overrides: dict) -> None:
     if rejected:
         raise ValueError('unrecognized campaign settings: ' + ', '.join(rejected))
 
+def merge_setting_entry(base: dict, entry: dict) -> dict:
+    merged = {**base, **entry}
+    if isinstance(base.get('params'), dict) and isinstance(entry.get('params'), dict):
+        merged['params'] = {**base['params'], **entry['params']}
+    return merged
+
 def load_settings(overrides: dict | None=None) -> dict:
     overrides = campaign_over_presets(copy.deepcopy(overrides or {}))
     reject_unrecognized_settings(overrides)
@@ -468,13 +503,13 @@ def load_settings(overrides: dict | None=None) -> dict:
     settings.update({key: value for key, value in overrides.items() if key != 'filters'})
     settings['losses'] = copy.deepcopy(DEFAULT_LOSSES)
     for name, entry in loss_settings.items():
-        settings['losses'][name] = {**settings['losses'].get(name, {}), **entry}
+        settings['losses'][name] = merge_setting_entry(settings['losses'].get(name, {}), entry)
     for parameter, (name, argument) in {**LOSS_PARAMETERS, **{name: ('multidomain', name) for name in DOMAIN_PARAMETERS}}.items():
         if parameter in settings:
             settings['losses'].setdefault(name, {}).setdefault('params', {}).setdefault(argument, settings[parameter])
     if isinstance(overrides.get('filters'), dict):
         for name, entry in overrides['filters'].items():
-            settings['filters'][name] = {**settings['filters'].get(name, {}), **entry}
+            settings['filters'][name] = merge_setting_entry(settings['filters'].get(name, {}), entry)
     elif 'filters' in overrides:
         settings['filters'] = overrides['filters']
     if settings.get('sparse_output'):
@@ -482,6 +517,10 @@ def load_settings(overrides: dict | None=None) -> dict:
             if name not in overrides:
                 settings[name] = value
     configure_campaign_features(settings, ConfigurationRequest(overrides, loss_settings))
+    for block, registry in (('losses', REGISTERED_LOSSES), ('filters', REGISTERED_FILTER_METRICS)):
+        for name, entry in settings[block].items() if isinstance(settings.get(block), dict) else ():
+            if isinstance(entry, dict) and name in registry and 'confidence_floor' in inspect.signature(registry[name]).parameters:
+                entry.setdefault('params', {})['confidence_floor'] = float(settings['confidence_floor'])
     for setting_name, filter_name in FINAL_CONFIDENCE_FILTERS.items():
         if setting_name in overrides and isinstance(settings['filters'], dict) and (filter_name not in overrides.get('filters', {})):
             settings['filters'][filter_name]['threshold'] = float(overrides[setting_name])
@@ -711,8 +750,15 @@ def read_campaign_metadata(path: str | Path | None) -> dict[str, str]:
 
 def read_settings(path: str | Path, overrides: dict | None=None) -> dict:
     settings_path = Path(path).resolve()
+<<<<<<< HEAD
     request = json.loads(settings_path.read_text())
     request.pop('description', None)
+=======
+    try:
+        request = json.loads(settings_path.read_text())
+    except json.JSONDecodeError as unreadable:
+        raise ValueError(f'{settings_path} is not readable JSON: {unreadable}') from unreadable
+>>>>>>> 113182c106caa9906cca5fcb5cb75c23a2a68712
     for target in request.get('targets', []):
         target['target_path'] = str((settings_path.parent / target['target_path']).resolve())
     if request.get('binder_scaffold'):

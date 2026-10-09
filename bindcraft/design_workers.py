@@ -1,11 +1,13 @@
+import ctypes
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
-from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
+import tempfile
+from bindcraft.af2 import GRADIENT_MEMORY_SHARE, campaign_length_bucket, padded_prediction_length, worker_memory_budget_bytes
 from bindcraft.campaign_output import json_compatible
 from bindcraft.protein_preparation import design_residue_count
 from bindcraft.settings import build_design_settings
@@ -17,37 +19,57 @@ GPU_MEMORY_HEADROOM_GB = 4.0
 MAXIMUM_WORKERS_PER_GPU = 8
 AUTOMATIC_WORKERS_PER_GPU = 7
 TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
+CUDA_UUID_BYTES = 16
 
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
 
-def visible_design_gpus() -> list[str]:
-    visible = os.environ.get('CUDA_VISIBLE_DEVICES')
-    if visible is not None:
-        return [device.strip() for device in visible.split(',') if device.strip()]
-    try:
-        listing = subprocess.run(['nvidia-smi', '--query-gpu=index', '--format=csv,noheader'], capture_output=True, text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return []
-    return [line.strip() for line in listing.splitlines() if line.strip()]
+def cuda_driver_call(driver, entry: str, *arguments) -> None:
+    status = getattr(driver, entry)(*arguments)
+    if status:
+        raise OSError(f'{entry} returned CUDA driver status {status}')
 
-def selected_design_gpus(gpu_ids: str | list | None=None) -> list[str]:
+def design_gpu_uuid(driver, ordinal: int) -> str:
+    device, blob = ctypes.c_int(), (ctypes.c_char * CUDA_UUID_BYTES)()
+    cuda_driver_call(driver, 'cuDeviceGet', ctypes.byref(device), ordinal)
+    cuda_driver_call(driver, 'cuDeviceGetUuid', blob, device)
+    digits = blob.raw.hex()
+    return 'GPU-' + '-'.join((digits[:8], digits[8:12], digits[12:16], digits[16:20], digits[20:]))
+
+def visible_design_gpus() -> list[str]:
+    try:
+        driver, count = ctypes.CDLL('libcuda.so.1'), ctypes.c_int()
+        cuda_driver_call(driver, 'cuInit', 0)
+        cuda_driver_call(driver, 'cuDeviceGetCount', ctypes.byref(count))
+        return [design_gpu_uuid(driver, ordinal) for ordinal in range(count.value)]
+    except OSError:
+        return []
+
+def selected_design_gpus(gpu_ids: str | int | list | None=None) -> list[str]:
     gpus = visible_design_gpus()
     if gpu_ids in (None, '', 'all'):
         return gpus
-    requested = [str(device).strip() for device in (gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids) if str(device).strip()]
-    missing = [device for device in requested if device not in gpus]
+    named = gpu_ids.split(',') if isinstance(gpu_ids, str) else gpu_ids if isinstance(gpu_ids, (list, tuple)) else [gpu_ids]
+    aliases = {str(ordinal): uuid for ordinal, uuid in enumerate(gpus)} | {uuid: uuid for uuid in gpus}
+    requested = [str(device).strip() for device in named if str(device).strip()]
+    missing = [device for device in requested if device not in aliases]
     if missing:
         raise ValueError(f'requested GPUs {missing} are not visible to this process')
-    return requested
+    return list(dict.fromkeys(aliases[device] for device in requested))
 
 def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
     try:
-        listing = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
+        listing = subprocess.run(['nvidia-smi', '--query-gpu=uuid,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return {}
-    fields = [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]
-    return {index: (float(free_mib) / 1024, float(total_mib) / 1024) for index, free_mib, total_mib in fields}
+    memory = {}
+    for row in [[field.strip() for field in line.split(',')] for line in listing.splitlines() if line.strip()]:
+        try:
+            uuid, free_mib, total_mib = row
+            memory[uuid] = (float(free_mib) / 1024, float(total_mib) / 1024)
+        except ValueError:
+            continue
+    return memory
 
 def estimate_design_memory_gb(residue_count: int) -> float:
     return DESIGN_MEMORY_SAFETY_FACTOR * (DESIGN_MODEL_RESIDENT_GB + DESIGN_ACTIVATION_BYTES_PER_RESIDUE_PAIR * int(residue_count) ** 2 / 1e9)
@@ -86,15 +108,50 @@ def host_memory_worker_ceiling(gpu_count: int) -> int:
         return MAXIMUM_WORKERS_PER_GPU
     return max(1, int(available_gb // HOST_MEMORY_PER_WORKER_GB) // gpu_count)
 
-SUBBATCH_MEMORY_SHARE = 0.5
+def cgroup_cpu_quota() -> int:
+    #mostly for docker
+    try
+        quota, period = open('/sys/fs/cgroup/cpu.max').read().split()
+        if quota != 'max':
+            return max(1, int(int(quota) / int(period)))
+    except (OSError, ValueError):
+        pass
+    try:
+        quota = int(open('/sys/fs/cgroup/cpu/cpu.cfs_quota_us').read())
+        period = int(open('/sys/fs/cgroup/cpu/cpu.cfs_period_us').read())
+        if quota > 0 and period > 0:
+            return max(1, quota // period)
+    except (OSError, ValueError):
+        pass
+    return 0
+
+def allocated_host_cpus() -> list[int]:
+    if hasattr(os, 'sched_getaffinity'):
+        cpus = sorted(os.sched_getaffinity(0))
+        quota = cgroup_cpu_quota()
+        return cpus[:quota] if quota and quota < len(cpus) else cpus
+    return list(range(os.cpu_count() or 1))
+
+HOST_CPUS_PER_WORKER = 2
+
+def worker_cpu_slices(worker_count: int) -> list[list[int]]:
+    if not hasattr(os, 'sched_setaffinity'):
+        return [[] for _ in range(worker_count)]
+    cpus = allocated_host_cpus()
+    if worker_count < 2 or len(cpus) < HOST_CPUS_PER_WORKER * worker_count:
+        return [[] for _ in range(worker_count)]
+    share = len(cpus) // worker_count
+    return [cpus[index * share:(index + 1) * share] for index in range(worker_count)]
+
+UNSHARDED_BYTES_PER_RESIDUE_PAIR = 47952
 PACKED_LAUNCH_STAGGER_SECONDS = 0.0
 
 def campaign_subbatch_size(settings: dict, residue_count: int | None) -> int | None | str:
     requested = settings.get('subbatch_size', 'auto')
     if requested != 'auto' or not residue_count:
         return requested
-    free_gb = max((free for free, _ in design_gpu_memory_gb().values()), default=0.0)
-    return None if free_gb and estimate_design_memory_gb(residue_count) <= SUBBATCH_MEMORY_SHARE * free_gb else requested
+    budget = worker_memory_budget_bytes()
+    return None if not budget or UNSHARDED_BYTES_PER_RESIDUE_PAIR * residue_count ** 2 <= GRADIENT_MEMORY_SHARE * budget else requested
 
 def design_worker_launch_stagger(settings: dict) -> float:
     return float(os.environ.get('BINDCRAFT_WORKER_LAUNCH_STAGGER', settings.get('worker_launch_stagger', PACKED_LAUNCH_STAGGER_SECONDS)))
@@ -126,9 +183,9 @@ def plan_design_workers(settings: dict, residue_count: int | None=None, trajecto
     worker_limit = int(os.environ.get('BINDCRAFT_DESIGN_WORKERS', settings.get('design_workers') or 0))
     plan = []
     host_ceiling = host_memory_worker_ceiling(len(gpus))
-    for gpu in gpus:
+    for card, gpu in enumerate(gpus):
         packed = min(host_ceiling, design_workers_per_gpu(settings, gpu_memory.get(gpu, (0.0, 0.0))[0], residue_count))
-        plan += [{'gpu': gpu, 'memory_fraction': 0.0} for _ in range(packed)]
+        plan += [{'gpu': gpu, 'card': card, 'memory_fraction': 0.0} for _ in range(packed)]
     worker_limits = [limit for limit in (worker_limit, trajectory_budget) if limit]
     plan = assign_worker_length_buckets(plan[:min(worker_limits)] if worker_limits else plan, campaign_length_buckets(settings))
     for worker in plan:
@@ -138,6 +195,8 @@ def plan_design_workers(settings: dict, residue_count: int | None=None, trajecto
         needed_gb = [estimate_design_memory_gb(worker['residue_count']) for worker in packed]
         for worker, memory_fraction in zip(packed, design_worker_memory_fractions(*gpu_memory.get(gpu, (0.0, 0.0)), needed_gb)):
             worker['memory_fraction'] = memory_fraction
+        for worker, cpus in zip(plan, worker_cpu_slices(len(plan))):
+        worker['cpus'] = cpus
     return plan
 
 BLOCK_OPENING = '=== trajectory '
@@ -172,6 +231,10 @@ class TrajectoryOrderedConsole:
                     break
                 print(self.finished.pop(number), end='', flush=True)
 
+    def aside(self, note: str) -> None:
+        with self.console_lock:
+            print(note, flush=True)
+
 def relay_worker_output(stream, log_file, console: TrajectoryOrderedConsole, worker_index: int=0) -> None:
     block, trajectory_number = [], None
     try:
@@ -185,6 +248,25 @@ def relay_worker_output(stream, log_file, console: TrajectoryOrderedConsole, wor
             block, trajectory_number = [line], opening
     finally:
         console.hand_over(worker_index, trajectory_number, ''.join(block), None)
+
+def worker_stop_reason(exit_code: int) -> str:
+    if exit_code >= 0:
+        return f'exited {exit_code}'
+    try:
+        return f'killed by {signal.Signals(-exit_code).name}'
+    except ValueError:
+        return f'killed by signal {-exit_code}'
+
+def campaign_exit_status(exit_codes: list[int]) -> int:
+    failure = next((exit_code for exit_code in exit_codes if exit_code), 0)
+    return 128 - failure if failure < 0 else failure
+
+def supervise_design_worker(process: subprocess.Popen, log_file, console: TrajectoryOrderedConsole, worker_index: int) -> None:
+    try:
+        relay_worker_output(process.stdout, log_file, console, worker_index)
+    finally:
+        if process.wait():
+            console.aside(f'campaign lost design worker {worker_index}, {worker_stop_reason(process.returncode)} | {log_file.name}')
 
 def report_campaign_close(project_folders: tuple[str, ...], requested_designs: int=0, max_trajectories: int | None=None) -> None:
     from bindcraft.campaign_log import campaign_budget_exhausted, campaign_closed
@@ -213,19 +295,24 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
                 environment['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(worker['memory_fraction'])
             if worker.get('lengths'):
                 environment['BINDCRAFT_BINDER_LENGTHS'] = ','.join(str(length) for length in worker['lengths'])
-            log_file = open(os.path.join(log_directory, f'worker_{worker_index:02d}_gpu_{worker["gpu"]}.log'), 'a', buffering=1)
+            if worker.get('cpus'):
+                environment['BINDCRAFT_WORKER_CPUS'] = ','.join(str(cpu) for cpu in worker['cpus'])
+            log_file = open(os.path.join(log_directory, f'{os.getpid()}_worker_{worker_index:02d}_gpu_{worker["card"]}.log'), 'a', buffering=1)
             log_files.append(log_file)
             process = subprocess.Popen(worker_command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             processes.append(process)
-            relay = threading.Thread(target=relay_worker_output, args=(process.stdout, log_file, console, worker_index), daemon=True)
+            relay = threading.Thread(target=supervise_design_worker, args=(process, log_file, console, worker_index), daemon=True)
             relay.start()
             relays.append(relay)
-            print(f'worker={worker_index} gpu={worker["gpu"]} log={log_file.name}', flush=True)
-        exit_codes = [process.wait() for process in processes]
+            print(f'worker={worker_index} gpu={worker["card"]} log={log_file.name}', flush=True)
         for relay in relays:
             relay.join()
+        exit_codes = [process.wait() for process in processes]
+        lost = sum(1 for exit_code in exit_codes if exit_code)
+        if lost:
+            console.aside(f'campaign closed {lost} of {len(exit_codes)} design worker(s) short: their trajectories are abandoned, and each is named above with its log')
         report_campaign_close(project_folders, requested_designs, max_trajectories)
-        return next((exit_code for exit_code in exit_codes if exit_code), 0)
+        return campaign_exit_status(exit_codes)
     finally:
         for process in processes:
             if process.poll() is None:
@@ -246,11 +333,14 @@ def dispatch_design_workers(settings: dict, log_directory: str, residue_count: i
     if worker_command is None:
         os.makedirs(log_directory, exist_ok=True)
         worker_settings_path = os.path.join(log_directory, 'campaign_settings.json')
-        Path(worker_settings_path).write_text(json.dumps(json_compatible(settings), sort_keys=True))
+        handle, partial_path = tempfile.mkstemp(dir=log_directory, prefix='campaign_settings.', suffix='.partial')
+        with os.fdopen(handle, 'w') as settings_file:
+            settings_file.write(json.dumps(json_compatible(settings), sort_keys=True))
+        os.replace(partial_path, worker_settings_path)
         worker_command = [sys.executable, '-u', '-m', 'bindcraft.cli', 'design', worker_settings_path, *worker_arguments]
     memory_note = f' at {estimate_design_memory_gb(residue_count):.1f} GB each' if residue_count and (not any(worker.get('lengths') for worker in plan)) else ''
-    print(f"campaign fan-out: {len(plan)} design workers on GPUs {','.join(worker['gpu'] for worker in plan)}{memory_note}", flush=True)
+    print(f"campaign fan-out: {len(plan)} design workers on GPUs {','.join(str(worker['card']) for worker in plan)}{memory_note}", flush=True)
     for worker_index, worker in enumerate(plan):
         if worker.get('lengths'):
-            print(f"worker={worker_index} gpu={worker['gpu']} draws {len(worker['lengths'])} binder lengths from {min(worker['lengths'])} to {max(worker['lengths'])}, folded at {worker['residue_count']} padded residues at {estimate_design_memory_gb(worker['residue_count']):.1f} GB", flush=True)
+            print(f"worker={worker_index} gpu={worker['card']} draws {len(worker['lengths'])} binder lengths from {min(worker['lengths'])} to {max(worker['lengths'])}, folded at {worker['residue_count']} padded residues at {estimate_design_memory_gb(worker['residue_count']):.1f} GB", flush=True)
     return launch_design_workers(plan, log_directory, worker_command, design_worker_launch_stagger(settings), project_folders or tuple(folder for folder in (settings.get('project_folder'),) if folder), int(settings.get('number_of_final_designs', 1)), trajectory_budget)

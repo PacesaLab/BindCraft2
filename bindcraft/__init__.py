@@ -2,6 +2,7 @@ import ast
 import functools
 import importlib.util
 import os
+import warnings
 import pkgutil
 
 def append_xla_flags(flags: str) -> None:
@@ -9,13 +10,20 @@ def append_xla_flags(flags: str) -> None:
 
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
+if os.environ.get('BINDCRAFT_WORKER_CPUS') and hasattr(os, 'sched_setaffinity'):
+    os.sched_setaffinity(0, {int(cpu) for cpu in os.environ['BINDCRAFT_WORKER_CPUS'].split(',') if cpu.strip()})
+if os.path.exists('/usr/lib/wsl/lib/libcuda.so.1'):
+    os.environ.setdefault('XLA_PYTHON_CLIENT_ALLOCATOR', 'cuda_async')
 OPERATOR_COMPILATION_CACHE = os.environ.get('JAX_COMPILATION_CACHE_DIR')
 os.environ.setdefault('JAX_COMPILATION_CACHE_DIR', os.path.join(os.environ.get('TMPDIR') or '/tmp', 'bindcraft_xla_cache'))
 os.environ.setdefault('JAX_PERSISTENT_CACHE_ENABLE_XLA_CACHES', 'none')
 if 'triton_gemm' not in os.environ.get('XLA_FLAGS', ''):
     append_xla_flags('--xla_gpu_enable_triton_gemm=false')
+if 'xla_gpu_autotune_level' not in os.environ.get('XLA_FLAGS', ''):
+    append_xla_flags('--xla_gpu_autotune_level=0')
 if os.environ.get('BC2_XLA_EXTRA', '').strip():
     append_xla_flags(os.environ['BC2_XLA_EXTRA'].strip())
+warnings.filterwarnings('ignore', message=r"Error reading persistent compilation cache entry for 'jit_(_where|dot_product_attention)", category=UserWarning)
 
 COMMAND_ENTRY = 'main'
 DEFINITION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

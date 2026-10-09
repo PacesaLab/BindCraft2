@@ -8,7 +8,7 @@ re-predicts each candidate from scratch to check it holds up, filters, and ranks
 This page explains what actually happens during a run, which knobs matter for everyday designs,
 how to pick a modality, and how to read the output so you can tell a promising design from a
 number that only looks good. It is the BC2 companion to the original
-[BindCraft wiki](https://github.com/martinpacesa/BindCraft/wiki/De-novo-binder-design-with-BindCraft); <!-- TODO: move this in to the documentation -->
+[BindCraft wiki](https://github.com/martinpacesa/BindCraft/wiki/De-novo-binder-design-with-BindCraft);
 the biology intuition carries over, but the settings, modalities and outputs below are BC2's.
 
 ```{important}
@@ -31,6 +31,15 @@ has N or runs out of budget.
 7. [What to look out for (common pitfalls)](#7-what-to-look-out-for-common-pitfalls)
 8. [A sensible first campaign](#8-a-sensible-first-campaign)
 
+```{toctree}
+:hidden:
+
+design-guide/02-setting-up-a-design
+design-guide/03-choosing-a-modality
+design-guide/04-properties-and-objectives
+design-guide/05-desperation-and-autotuning
+design-guide/06-reading-the-outputs
+```
 ---
 
 ## 1. How a campaign runs

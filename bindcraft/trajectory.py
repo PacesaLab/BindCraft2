@@ -48,7 +48,7 @@ def binder_alone_switch_metrics(protein_states: ProteinStates, predictions: Stru
     interface_name = next((name for name in induced_fit_hinge_names(losses) if name.split('.')[0] == 'induced_fit_interface'), None)
     interface_parameters = losses[interface_name].function.keywords if interface_name else {}
     interface_rmsd = induced_fit_interface_rmsd_metric(protein_states, predictions, cutoff=float(interface_parameters.get('cutoff', 8.0)), interface_residues=interface_mask_residues(losses[interface_name].interface_mask)) if interface_name else None
-    return {'binder_alone_plddt': float(predictions[BINDER_ALONE].metrics['plddt'].mean()), 'interface_rmsd': interface_rmsd, 'global_tm': induced_fit_tm_metric(protein_states, predictions)}
+    return {'binder_alone_plddt': float(predictions[BINDER_ALONE].metrics['plddt'].mean()), 'interface_rmsd': interface_rmsd, 'induced_fit_tm': induced_fit_tm_metric(protein_states, predictions)}
 
 def binder_alone_switch_reached(metrics: dict[str, float | None], losses: dict[str, DesignLoss], minimum_plddt: float) -> bool:
     if metrics['binder_alone_plddt'] < minimum_plddt:
@@ -56,8 +56,6 @@ def binder_alone_switch_reached(metrics: dict[str, float | None], losses: dict[s
     for name in induced_fit_hinge_names(losses):
         parameters = losses[name].function.keywords
         if name.split('.')[0] == 'induced_fit_interface' and (metrics['interface_rmsd'] or 0.0) < float(parameters.get('interface_rmsd_target', 3.0)):
-            return False
-        if name.split('.')[0] == 'induced_fit_global' and (metrics['global_tm'] is None or metrics['global_tm'] > float(parameters.get('tm_target', 0.6))):
             return False
     return True
 
@@ -210,7 +208,7 @@ def binder_alone_operation(design_settings: BinderDesignSettings, design_model: 
 def build_stage_plan(design_settings: BinderDesignSettings, losses: dict[str, DesignLoss], multi_chain_binders: tuple[tuple[str, ...], ...], design_model: DifferentiableProteinPredictor, wild_type_states: ProteinStates, recorder: TrajectoryRecorder | None=None) -> tuple[DesignStage, ...]:
     settings = design_settings.settings
     stage_rounds = merged_gradient_sequence_updates(design_settings)
-    fold_switching = bool(induced_fit_hinge_names(losses))
+    induced_fit_hinge = bool(induced_fit_hinge_names(losses))
     multitarget = len(design_settings.prepared_states) > 1
     sequence_optimizers = {'screen': LogitSequenceOptimizer(iterations=stage_rounds['screen'], start_softmax_weight=0.0, end_softmax_weight=0.9, multi_chain_binders=multi_chain_binders),
                            'refine': LogitSequenceOptimizer(iterations=stage_rounds['refine'], start_softmax_weight=0.9, end_softmax_weight=1.0, multi_chain_binders=multi_chain_binders),
@@ -225,15 +223,15 @@ def build_stage_plan(design_settings: BinderDesignSettings, losses: dict[str, De
             review.append(pooled_prediction_operation(design_settings, design_model, sequence_optimizers[name]))
         if name == 'screen':
             review.append(beta_sheet_budget_operation(design_settings, design_model, sequence_optimizers))
-        if name == 'screen' and fold_switching:
+        if name == 'screen' and induced_fit_hinge:
             advance.append(freeze_induced_fit_operation())
-        if fold_switching and name != 'harden':
+        if induced_fit_hinge and name != 'harden':
             advance.append(binder_alone_operation(design_settings, design_model, multi_chain_binders, recorder, name))
         stage_plan.append(DesignStage(name, sequence_optimizers[name], name != 'harden', tuple(prepare), tuple(review), tuple(advance)))
     return tuple(stage_plan)
 
 def required_final_states(design_settings: BinderDesignSettings, losses: dict[str, DesignLoss]) -> tuple[str, ...]:
-    switches_conformation = any(BINDER_ALONE in group for group in design_settings.binder_shapes)
+    switches_conformation = any(BINDER_ALONE in group for group in design_settings.binder_shapes) or any(name.startswith('fold_switching') for name in losses)
     return (BINDER_ALONE,) if induced_fit_hinge_names(losses) or switches_conformation else ()
 
 def run_stage_operations(operations: tuple[StageOperation, ...], trajectory: TrajectoryState) -> TrajectoryState:
@@ -254,6 +252,18 @@ def judge_stage(trajectory: TrajectoryState, design_settings: BinderDesignSettin
     filter_result, measured = evaluate_design_filters(stage_filters, trajectory.protein_states, filter_predictions) if stage_filters else (True, {})
     return (trajectory if filter_result is True else trajectory._replace(predictions=filter_predictions, failed=tuple(filter_result))), measured
 
+def gate_predictions(design_settings: BinderDesignSettings, design_model: ProteinPredictor, protein_states: ProteinStates, losses: dict[str, DesignLoss]) -> StructurePredictions:
+    draws = int(design_settings.settings.get('mutate_gate_draws') or 1)
+    if draws <= 1:
+        return design_model.predict(protein_states)
+    best_loss, best_predictions = None, None
+    for _ in range(draws):
+        predictions = design_model.predict(protein_states)
+        design_loss = float(weighted_design_loss(losses, protein_states, predictions))
+        if best_loss is None or design_loss < best_loss:
+            best_loss, best_predictions = design_loss, predictions
+    return best_predictions
+
 def run_mutation_polish(design_settings: BinderDesignSettings, design_model: DifferentiableProteinPredictor, protein_states: ProteinStates, wild_type_states: ProteinStates, losses: dict[str, DesignLoss], binder_alone_reference: StructurePrediction | None, multi_chain_binders: tuple[tuple[str, ...], ...], mutation_random_key: Array, conformation_random_key: Array, target_names: tuple[str, ...], recorder: TrajectoryRecorder | None) -> tuple[ProteinStates, StructurePredictions, str | None]:
     settings = design_settings.settings
     mutate_steps = design_stage_rounds(settings)['mutate']
@@ -262,13 +272,13 @@ def run_mutation_polish(design_settings: BinderDesignSettings, design_model: Dif
     design_model.dropout = False
     #pLDDT weighting, for multitargeting
     mutation_sampler = SemigreedySequenceSampler(key=mutation_random_key, multi_chain_binders=multi_chain_binders, mutation_weighting='plddt' if len(design_settings.prepared_states) > 1 else 'interface_iptm')
-    design_schedule = build_design_schedule(design_settings, wild_type_states, losses, mutate_steps, conformation_random_key, False)
+    design_schedule = build_design_schedule(design_settings, wild_type_states, losses, mutate_steps, conformation_random_key)
     if len(design_settings.prepared_states) > 1:
         protein_states = transfer_binder_sequences(wild_type_states, protein_states)
         design_schedule = FixedTargetSchedule(mutate_steps)
     protein_states, predictions = run_sequence_mutation_stage(protein_states, design_model, mutation_sampler=mutation_sampler, design_schedule=design_schedule, record_sequence_update=recorder, **induced_fit_reference_arguments(losses, binder_alone_reference, design_model, design_settings))
     protein_states = transfer_binder_sequences(wild_type_states, protein_states)
-    predictions = design_model.predict(protein_states)
+    predictions = gate_predictions(design_settings, design_model, protein_states, losses)
     stage_filters = design_stage_filters(design_settings, protein_states, 'mutate')
     filter_result, measured = evaluate_design_filters(stage_filters, protein_states, predictions) if stage_filters else (True, {})
     print(stage_outcome('mutate', filter_result is True, () if filter_result is True else tuple(filter_result), target_names, measured), flush=True)
@@ -298,7 +308,7 @@ def run_trajectory(design_settings: BinderDesignSettings, design_model: Differen
             recorder.sequence_parameters = stage.sequence_optimizer.sequence_parameters
         trajectory = run_stage_operations(stage.prepare, trajectory)
         design_model.dropout = stage.dropout and settings.get('design_dropout', DEFAULT_SETTINGS['design_dropout'])
-        design_schedule = build_design_schedule(design_settings, trajectory.design_target_states, trajectory.losses, stage.sequence_optimizer.iterations, conformation_random_key, False, target_schedule, stage.name)
+        design_schedule = build_design_schedule(design_settings, trajectory.design_target_states, trajectory.losses, stage.sequence_optimizer.iterations, conformation_random_key, target_schedule, stage.name)
         protein_states, predictions = run_gradient_design_stage(trajectory.protein_states, design_model, sequence_optimizer=stage.sequence_optimizer, design_schedule=design_schedule, record_sequence_update=recorder, select_best_round=len(design_settings.prepared_states) < 2, select_filtered_round=rotating_stage_filter_round(design_settings, target_schedule, trajectory.protein_states, stage.name), **induced_fit_reference_arguments(trajectory.losses, trajectory.binder_alone_reference, design_model, design_settings))
         if predictions is None:
             trajectory = trajectory._replace(predictions={}, failed=('no finite round',))

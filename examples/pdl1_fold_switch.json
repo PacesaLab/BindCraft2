@@ -1,14 +1,14 @@
 {
-  "modality": "binder",
+  "modality": "fold_switch",
   "target": "hPDL1",
   "binder_lengths": [
-    60,
-    100
+    120,
+    180
   ],
   "number_of_final_designs": 10,
-  "max_trajectories": 40,
+  "max_trajectories": 80,
   "min_plddt_refine": 0.65,
   "min_plddt_mutate": 0.65,
   "min_iptm_final": 0.6,
-  "project_folder": "results/pdl1_denovo"
+  "project_folder": "results/pdl1_fold_switch"
 }

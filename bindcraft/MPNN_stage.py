@@ -87,7 +87,7 @@ def prepare_multitarget_redesign(target_states: ProteinStates, binder: str, keep
 def ensemble_mean_predictions(protein_states: ProteinStates, model_predictions: dict[str, StructurePredictions]) -> StructurePredictions:
     predictions: StructurePredictions = {}
     for name in protein_states:
-        metric_names = {metric_name for model_outputs in model_predictions.values() for metric_name in model_outputs[name].metrics}
+        metric_names = {metric_name for model_outputs in model_predictions.values() for metric_name in model_outputs[name].metrics} - DESIGN_ONLY_METRICS
         metrics = {}
         for metric_name in metric_names:
             values = [model_outputs[name].metrics[metric_name] for model_outputs in model_predictions.values() if metric_name in model_outputs[name].metrics]
@@ -95,6 +95,7 @@ def ensemble_mean_predictions(protein_states: ProteinStates, model_predictions: 
         predictions[name] = StructurePrediction(protein_complex=next(iter(model_predictions.values()))[name].protein_complex, metrics=metrics)
     return predictions
 
+DESIGN_ONLY_METRICS = frozenset({'distogram', 'iptm_per_residue', 'experimentally_resolved_ca'})
 REACHABLE_CONFIDENCE_BOUNDS = {'plddt': (0.0, 1.0), 'ptm': (0.0, 1.0), 'iptm': (0.0, 1.0), 'pae': (0.0, 0.0)}
 
 def best_reachable_ensemble(model_predictions: dict[str, StructurePredictions], model_count: int, higher: bool) -> StructurePredictions:
@@ -102,7 +103,7 @@ def best_reachable_ensemble(model_predictions: dict[str, StructurePredictions], 
     predictions: StructurePredictions = {}
     for name in folded[0]:
         metrics = {}
-        for metric_name in {metric_name for model_outputs in folded for metric_name in model_outputs[name].metrics}:
+        for metric_name in {metric_name for model_outputs in folded for metric_name in model_outputs[name].metrics} - DESIGN_ONLY_METRICS:
             values = [model_outputs[name].metrics[metric_name] for model_outputs in folded if metric_name in model_outputs[name].metrics]
             bounds = REACHABLE_CONFIDENCE_BOUNDS.get(metric_name)
             best = (bounds[1] if higher else bounds[0]) if bounds else sum(values) / len(values)
@@ -160,12 +161,9 @@ class RedesignContext(NamedTuple):
 def prepare_binder_redesign(protein_complex: dict[str, Protein], design_settings: BinderDesignSettings, binder: str, target: str, prediction_state: str, target_states: ProteinStates | None=None, predicted_states: ProteinStates | None=None, multi_chain_binder: tuple[str, ...]=(), binder_alone_complex: dict[str, Protein] | None=None, design_pae: Array | None=None, trajectory_seed: int=0) -> RedesignContext:
     settings = design_settings.settings
     keep_interface = not settings.get('redesign_interface', DEFAULT_SETTINGS['redesign_interface'])
-    #fold switching case
-    if any((BINDER_ALONE in group for group in design_settings.binder_shapes)):
-        binder_alone_complex = None
-    mobile_residues = induced_fit_mobile_residues(protein_complex[binder], binder_alone_complex[binder], float(settings.get('induced_fit_mpnn_threshold', 2.0)), int(settings.get('induced_fit_mpnn_shell', 1)), float(settings.get('induced_fit_mpnn_designed_share', INDUCED_FIT_DESIGNED_SHARE))) if binder_alone_complex else None #induced fit case
+    mobile_residues = induced_fit_mobile_residues(protein_complex[binder], binder_alone_complex[binder], float(settings.get('induced_fit_mpnn_threshold', 2.0)), int(settings.get('induced_fit_mpnn_shell', 1)), float(settings.get('induced_fit_mpnn_designed_share', INDUCED_FIT_DESIGNED_SHARE))) if binder_alone_complex else None
     if mobile_residues is not None:
-        print(f'induced fit: holding {int(mobile_residues.sum())} of {len(protein_complex[binder])} residue(s) that move between the two states through ProteinMPNN', flush=True)
+        print(f'conformational change: holding {int(mobile_residues.sum())} of {len(protein_complex[binder])} residue(s) that move between the two states through ProteinMPNN', flush=True)
     hold_framework = bool(settings.get('binder_scaffold')) #fold conditioning case
     if hold_framework:
         print(f"scaffold: holding {sum((int(has_residue_flag(protein_complex[name].flags, ResidueFlags.TEMPLATE).sum()) for name in binder_copy_chains(protein_complex, binder)))} framework residue(s) through ProteinMPNN", flush=True)
@@ -266,7 +264,8 @@ def redesign_and_validate_binders(protein_complex: dict[str, Protein],
         ensemble = predict_validation_ensemble(structure_predictor, protein_states, validation_models, stage_filters)
         predictions = ensemble.predictions
         filter_result, metrics = evaluate_design_filters(stage_filters, protein_states, predictions)
-        failed_filters = ensemble.failed_confidence or ([] if filter_result is True else list(filter_result))
+        campaign_failures = [] if filter_result is True else list(filter_result)
+        failed_filters = ensemble.failed_confidence + [name for name in campaign_failures if name not in ensemble.failed_confidence]
         metrics.update(decoded_sequence_metrics(decoded_complex, binder))
         interface_pdae_scores = {name: interface_pdae(protein_states, predictions, prediction_state=prediction_state, binder=binder, target=target) for name, interface_pdae in INTERFACE_PDAE_METRICS.items()}
         print(candidate_outcome(candidate_number, candidate_count, redesign.decode_source or rotation_state, failed_filters, metrics, bool(settings.get('binder_scaffold')), tuple(redesign.validation_states)), flush=True)

@@ -174,10 +174,52 @@ The first five carry an environment variable that takes precedence over the sett
 | `subbatch_size` | — | `auto` | An integer splits large calculations to save memory; `null` disables chunking. |
 | `length_bucket_size` | — | 32 | Pad lengths to reuse compiled shapes; 1 disables padding. |
 | `compile_next_length` | — | true | Prepare the next length while the current trajectory runs. |
-| `attention_backend` | — | `auto` | Choose the attention implementation; options: 'auto', 'stock', 'cudnn' |
+| `attention_backend` | — | `auto` | Choose the attention implementation; options: 'auto', 'cudnn', 'chunked', 'stock'. 'auto' takes cuDNN where it works and 'chunked' otherwise |
 | `use_cueq` | — | false | Enable cuEquivariance kernels, which the CUDA extras install. |
 
 `BINDCRAFT_WORKER_ID`, `BINDCRAFT_WORKER_COUNT` and `BINDCRAFT_BINDER_LENGTHS` are set **for** each worker by the campaign. **Do not set them; a process that carries `BINDCRAFT_WORKER_ID` believes it is a worker and will not fan out.**
+
+### How large a design your card will hold
+
+Memory is sized from the **padded complex**: the longest target chain plus the longest binder,
+rounded up to `length_bucket_size` (32 by default). A 350-residue target with binders of 60-120
+residues gives a padded total of 480. Scaffolded modalities pad each binder chain separately, and
+`copies` multiplies the binder, so a homotrimer of 80-residue chains against a 200-residue target
+totals 448.
+
+Workers each hold their own copy of the parameters, so the count a card can take falls as the
+padded total grows:
+
+| card | 256 | 384 | 512 | 640 | 768 | 1024 |
+| --- | --- | --- | --- | --- | --- | --- |
+| L4 24 GB | 1 | 1 | 1 | 1 | 1 | 1 |
+| A100 40 GB | 3 | 1 | 1 | 1 | 1 | 1 |
+| L40S / RTX 6000 Ada 48 GB | 3 | 2 | 1 | 1 | 1 | 1 |
+| A100 / H100 80 GB | 6 | 4 | 2 | 2 | 1 | 1 |
+| GH200 96 GB | 7 | 5 | 3 | 2 | 1 | 1 |
+| H200 141 GB | 7 | 7 | 5 | 3 | 2 | 1 |
+
+Beyond a point one worker no longer fits either. These are the largest padded totals each card
+holds, and the binder lengths that leaves against a few target sizes:
+
+| card | largest padded total | binder against a 150 aa target | against 350 aa | against 600 aa |
+| --- | --- | --- | --- | --- |
+| L4 24 GB | 416 | 266 | 66 | — |
+| A100 40 GB | 608 | 458 | 258 | — |
+| L40S / RTX 6000 Ada 48 GB | 672 | 522 | 322 | 72 |
+| A100 / H100 80 GB | 928 | 778 | 578 | 328 |
+| GH200 96 GB | 1056 | 906 | 706 | 456 |
+| H200 141 GB | 1280 | 1130 | 930 | 680 |
+
+**The planner never plans zero workers.** Past the ceiling in that table it still launches one, and
+the run fails on the first gradient step rather than at startup. If a campaign dies immediately on
+a large target, compare its padded total against this table before changing anything else.
+
+These are the planner's own estimates, `2.0 × (3.4 GB + 38 kB × N²)` against the card's free memory
+less 4 GB of headroom, and they are deliberately conservative. A shape a little past the ceiling may
+still run: BindCraft2 measures the compiled gradient and moves that one shape onto a memory-light
+attention route when it does not fit, so the first thing you see is a line naming the shape and the
+route, not a failure. A shape far past it runs out of memory anyway.
 
 ### When a campaign runs out of GPU memory
 
