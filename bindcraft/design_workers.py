@@ -108,6 +108,39 @@ def host_memory_worker_ceiling(gpu_count: int) -> int:
         return MAXIMUM_WORKERS_PER_GPU
     return max(1, int(available_gb // HOST_MEMORY_PER_WORKER_GB) // gpu_count)
 
+def cgroup_cpu_quota() -> int:
+    #mostly for docker
+    try
+        quota, period = open('/sys/fs/cgroup/cpu.max').read().split()
+        if quota != 'max':
+            return max(1, int(int(quota) / int(period)))
+    except (OSError, ValueError):
+        pass
+    try:
+        quota = int(open('/sys/fs/cgroup/cpu/cpu.cfs_quota_us').read())
+        period = int(open('/sys/fs/cgroup/cpu/cpu.cfs_period_us').read())
+        if quota > 0 and period > 0:
+            return max(1, quota // period)
+    except (OSError, ValueError):
+        pass
+    return 0
+
+def allocated_host_cpus() -> list[int]:
+    if hasattr(os, 'sched_getaffinity'):
+        cpus = sorted(os.sched_getaffinity(0))
+        quota = cgroup_cpu_quota()
+        return cpus[:quota] if quota and quota < len(cpus) else cpus
+    return list(range(os.cpu_count() or 1))
+
+HOST_CPUS_PER_WORKER = 2
+
+def worker_cpu_slices(worker_count: int) -> list[list[int]]:
+    cpus = allocated_host_cpus()
+    if worker_count < 2 or len(cpus) < HOST_CPUS_PER_WORKER * worker_count:
+        return [[] for _ in range(worker_count)]
+    share = len(cpus) // worker_count
+    return [cpus[index * share:(index + 1) * share] for index in range(worker_count)]
+
 UNSHARDED_BYTES_PER_RESIDUE_PAIR = 47952
 PACKED_LAUNCH_STAGGER_SECONDS = 0.0
 
@@ -160,6 +193,8 @@ def plan_design_workers(settings: dict, residue_count: int | None=None, trajecto
         needed_gb = [estimate_design_memory_gb(worker['residue_count']) for worker in packed]
         for worker, memory_fraction in zip(packed, design_worker_memory_fractions(*gpu_memory.get(gpu, (0.0, 0.0)), needed_gb)):
             worker['memory_fraction'] = memory_fraction
+        for worker, cpus in zip(plan, worker_cpu_slices(len(plan))):
+        worker['cpus'] = cpus
     return plan
 
 BLOCK_OPENING = '=== trajectory '
@@ -258,6 +293,8 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
                 environment['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(worker['memory_fraction'])
             if worker.get('lengths'):
                 environment['BINDCRAFT_BINDER_LENGTHS'] = ','.join(str(length) for length in worker['lengths'])
+            if worker.get('cpus'):
+                environment['BINDCRAFT_WORKER_CPUS'] = ','.join(str(cpu) for cpu in worker['cpus'])
             log_file = open(os.path.join(log_directory, f'{os.getpid()}_worker_{worker_index:02d}_gpu_{worker["card"]}.log'), 'a', buffering=1)
             log_files.append(log_file)
             process = subprocess.Popen(worker_command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
