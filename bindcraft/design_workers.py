@@ -135,6 +135,8 @@ def allocated_host_cpus() -> list[int]:
 HOST_CPUS_PER_WORKER = 2
 
 def worker_cpu_slices(worker_count: int) -> list[list[int]]:
+    if not hasattr(os, 'sched_setaffinity'):
+        return [[] for _ in range(worker_count)]
     cpus = allocated_host_cpus()
     if worker_count < 2 or len(cpus) < HOST_CPUS_PER_WORKER * worker_count:
         return [[] for _ in range(worker_count)]
