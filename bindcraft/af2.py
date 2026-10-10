@@ -283,7 +283,8 @@ def is_out_of_memory(failure: BaseException) -> bool:
     return 'resource_exhausted' in text or 'out of memory' in text
 
 SUBBATCH_RESIDUE_THRESHOLD = 384
-LARGE_COMPLEX_SUBBATCH_SIZE = 4
+LARGE_COMPLEX_SUBBATCH_SIZE = 256
+SUBBATCH_LADDER = (None, 256, 128, 64)
 
 def resolve_subbatch_size(residue_count: int, subbatch_size: int | None | str='auto') -> int | None:
     if subbatch_size != 'auto':
@@ -326,10 +327,14 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         self.prediction_compile_cache = CompiledModelCache(max_cache_size)
         self.gradient_compile_cache = CompiledModelCache(max_cache_size)
         self.shape_attention_backend: dict = {}
+        self.shape_subbatch_size: dict = {}
         self.executed_lengths: set[int] = set()
         self.last_attention_backend = self.attention_backend
         self.compiled_shapes: set = set()
 
+    def subbatch_ladder(self) -> tuple:
+        return SUBBATCH_LADDER if self.subbatch_size == 'auto' else (self.subbatch_size,)
+    
     def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None, attention_backend: str | None=None) -> af_model.RunModel:
         attention_backend = attention_backend or self.attention_backend
         runner_key = model_family, subbatch_size, attention_backend, self.use_cueq, self.use_remat
@@ -428,18 +433,27 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             metrics = trim_padded_metrics(metrics, real_residue_positions(chain_lengths, true_lengths))
         return StructurePrediction(protein_complex=predicted_complex, metrics=metrics)
 
-    def _fall_back_to_chunked(self, model: str, complex_shapes: tuple, reference_shapes: tuple, losses: dict[str, DesignLoss], gradient_arguments: tuple, shape_signature: tuple, residue_total: int, reason: str) -> Callable:
+    def _fall_back_to_chunked(self, model: str, complex_shapes: tuple, reference_shapes: tuple, losses: dict[str, DesignLoss], gradient_arguments: tuple, shape_signature: tuple, residue_total: int, subbatch_size: int | None | str, reason: str) -> Callable:
         print(f'{self.attention_backend} attention {reason} at {residue_total} padded residues; using the {ATTENTION_FALLBACK_BACKEND} route for this shape instead', flush=True)
         self.shape_attention_backend[shape_signature] = ATTENTION_FALLBACK_BACKEND
-        compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, ATTENTION_FALLBACK_BACKEND)
-        #compiled inside the caller lock, not on first call
+        compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, ATTENTION_FALLBACK_BACKEND, subbatch_size)
         compiled_gradient.lower(*gradient_arguments).compile()
         return compiled_gradient
 
-    def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss], attention_backend: str | None=None) -> Callable:
+    def _widest_shard_that_fits(self, model: str, complex_shapes: tuple, reference_shapes: tuple, losses: dict[str, DesignLoss], gradient_arguments: tuple, shape_signature: tuple, attention_backend: str, residue_total: int) -> tuple[Callable, str, int | None | str]:
+        ladder = self.subbatch_ladder()
+        for subbatch_size in ladder:
+            compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend, subbatch_size)
+            if attention_backend == ATTENTION_FALLBACK_BACKEND or executable_fits(compiled_gradient.lower(*gradient_arguments).compile()):
+                return compiled_gradient, attention_backend, subbatch_size
+            print(f'{residue_total} padded residues need more than this worker may allocate at subbatch size {subbatch_size}; trying a narrower shard', flush=True)
+        return self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, ladder[-1], 'needs more than this worker may allocate at every subbatch size'), ATTENTION_FALLBACK_BACKEND, ladder[-1]
+
+
+    def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss], attention_backend: str | None=None, subbatch_size: int | None | str='auto') -> Callable:
         model_family = self.model_families[model]
         loss_signature = tuple((name, losses[name].function, losses[name].required_states) for name in sorted(losses))
-        state_subbatch_sizes = tuple((state_name, resolve_subbatch_size(sum(chain_lengths), self.subbatch_size)) for state_name, _, chain_lengths in complex_shapes)
+        state_subbatch_sizes = tuple((state_name, resolve_subbatch_size(sum(chain_lengths), subbatch_size)) for state_name, _, chain_lengths in complex_shapes)
         attention_backend = attention_backend or self.attention_backend
         cache_key = model_family, complex_shapes, reference_shapes, loss_signature, state_subbatch_sizes, self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.large_complex_initialization, attention_backend
         compiled_gradient = self.gradient_compile_cache.get(cache_key)
@@ -513,16 +527,15 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         shape_signature = self.model_families[model], complex_shapes, reference_shapes
         residue_total = sum(sum(chain_lengths) for _, _, chain_lengths in complex_shapes)
         attention_backend = self.shape_attention_backend.get(shape_signature, self.attention_backend)
-        compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend)
+        subbatch_size = self.shape_subbatch_size.get(shape_signature, self.subbatch_ladder()[0])
+        compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend, subbatch_size)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
         if shape_signature not in self.shape_attention_backend:
             with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses))), compile_blocking) as compiling:
                 if compiling:
-                    executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
+                    compiled_sequence_gradients, attention_backend, subbatch_size = self._widest_shard_that_fits(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, attention_backend, residue_total)
                     self.shape_attention_backend[shape_signature] = attention_backend
-                    if attention_backend != ATTENTION_FALLBACK_BACKEND and not executable_fits(executable):
-                        attention_backend = ATTENTION_FALLBACK_BACKEND
-                        compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'needs more than this worker may allocate')
+                    self.shape_subbatch_size[shape_signature] = subbatch_size
         self.last_attention_backend = attention_backend
         if compile_only:
             return {}, {}, jnp.asarray(0.0)
@@ -534,7 +547,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         except Exception as gradient_failure:
             if attention_backend == ATTENTION_FALLBACK_BACKEND or not is_out_of_memory(gradient_failure):
                 raise
-            compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'ran out of memory despite fitting the check')
+            compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, subbatch_size, 'ran out of memory despite fitting the check')
             self.last_attention_backend = ATTENTION_FALLBACK_BACKEND
             (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
             jax.block_until_ready(((design_loss, prediction_arrays), shared_chain_gradients))
