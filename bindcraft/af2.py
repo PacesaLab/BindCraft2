@@ -444,9 +444,11 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         ladder = self.subbatch_ladder()
         for subbatch_size in ladder:
             compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend, subbatch_size)
-            if attention_backend == ATTENTION_FALLBACK_BACKEND or executable_fits(compiled_gradient.lower(*gradient_arguments).compile()):
+            if executable_fits(compiled_gradient.lower(*gradient_arguments).compile()):
                 return compiled_gradient, attention_backend, subbatch_size
             print(f'{residue_total} padded residues need more than this worker may allocate at subbatch size {subbatch_size}; trying a narrower shard', flush=True)
+        if attention_backend == ATTENTION_FALLBACK_BACKEND:
+            return compiled_gradient, attention_backend, ladder[-1]
         return self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, ladder[-1], 'needs more than this worker may allocate at every subbatch size'), ATTENTION_FALLBACK_BACKEND, ladder[-1]
 
 
