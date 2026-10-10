@@ -1,11 +1,13 @@
 {
   "mpnn_model": "v_48_020",
+  "confidence_floor": 0.7,
   "mpnn_variant": "negative",
   "validation_recycles": 3,
   "validation_crop_flank": 5,
   "autotune": true,
   "attention_backend": "auto",
   "use_cueq": false,
+  "use_remat": true,
   "subbatch_size": "auto",
   "trajectory_only": false,
   "resume": true,

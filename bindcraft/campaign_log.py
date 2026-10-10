@@ -1,10 +1,23 @@
 import math
 import os
+import tomllib
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from bindcraft.protein import recorded_number
 
+def source_tree_version() -> str | None:
+    pyproject = Path(__file__).resolve().parents[1] / 'pyproject.toml'
+    try:
+        with pyproject.open('rb') as handle:
+            project = tomllib.load(handle)['project']
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return None
+    return project.get('version') if project.get('name') == 'bindcraft' else None
+
 def released_version() -> str:
-    """The version every output is stamped with, read from the installed package so it cannot drift from pyproject."""
+    declared = source_tree_version()
+    if declared:
+        return f'BindCraft 2 v{declared}'
     try:
         return f'BindCraft 2 v{version("bindcraft")}'
     except PackageNotFoundError:

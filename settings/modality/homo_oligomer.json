@@ -1,5 +1,5 @@
 {
-  "description": "Identical copies of one 40-80 residue chain; lengths are per copy",
+  "description": "Identical copies of one 40-120 residue chain; lengths are per copy",
   "copies": 2,
   "binder_lengths": [
     40,

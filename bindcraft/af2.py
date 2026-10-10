@@ -1,5 +1,7 @@
 import copy
-import fcntl
+import platform
+import threading
+import time
 import hashlib
 import os
 from contextlib import contextmanager
@@ -11,21 +13,77 @@ from bindcraft.af.alphafold.common import confidence, residue_constants
 from bindcraft.af.alphafold.model import config as af_config, data as af_data, model as af_model, modules as af_modules
 from bindcraft.af import accel
 from bindcraft.prediction import DifferentiableProteinPredictor, CompiledModelCache, residue_chain_ids, concatenate_chain_arrays, collect_shared_chains, split_residue_arrays_by_chain
-from bindcraft.loss import DesignLoss, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
+from bindcraft.loss import DesignLoss, chain_residue_slices, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
 from bindcraft.sequence_optimization import sequence_features_from_logits
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
 
+COMPILE_LOCK_HEARTBEAT_SECONDS = 30.0
+COMPILE_LOCK_STALE_SECONDS = 120.0
+COMPILE_LOCK_PATIENCE_SECONDS = 600.0
+
+def compile_lock_owner_is_gone(lock_path: str) -> bool:
+    try:
+        node, pid = open(lock_path).read().split()[:2]
+    except (OSError, ValueError):
+        return False
+    if node != platform.node():
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return True
+    except (OSError, ValueError):
+        return False
+    return False
+
 @contextmanager
-def one_worker_compiles(compile_shape: tuple):
+def one_worker_compiles(compile_shape: tuple, blocking: bool=True):
     cache_directory = os.environ.get('JAX_COMPILATION_CACHE_DIR')
     if not cache_directory:
-        yield
+        yield True
         return
     os.makedirs(cache_directory, exist_ok=True)
     shape_digest = hashlib.sha256(repr(compile_shape).encode()).hexdigest()[:16]
-    with open(os.path.join(cache_directory, f'compile_{shape_digest}.lock'), 'w') as compile_lock:
-        fcntl.flock(compile_lock, fcntl.LOCK_EX)
-        yield
+    lock_path = os.path.join(cache_directory, f'compile_{shape_digest}.lock')
+    waiting_since = time.time()
+    while True:
+        try:
+            lock_handle = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            if not blocking:
+                yield False
+                return
+            if time.time() - waiting_since > COMPILE_LOCK_PATIENCE_SECONDS:
+                print(f'compiling without the lock, {lock_path} has been held for {COMPILE_LOCK_PATIENCE_SECONDS:.0f}s', flush=True)
+                yield True
+                return
+            time.sleep(1.0)
+            try:
+                if compile_lock_owner_is_gone(lock_path) or time.time() - os.path.getmtime(lock_path) > COMPILE_LOCK_STALE_SECONDS:
+                    os.replace(lock_path, f'{lock_path}.stale')
+                    os.unlink(f'{lock_path}.stale')
+            except OSError:
+                pass
+    os.write(lock_handle, f'{platform.node()} {os.getpid()}\n'.encode())
+    finished = threading.Event()
+    def keep_the_lock_alive() -> None:
+        while not finished.wait(COMPILE_LOCK_HEARTBEAT_SECONDS):
+            try:
+                os.utime(lock_path, None)
+            except FileNotFoundError:
+                return
+    heartbeat = threading.Thread(target=keep_the_lock_alive, daemon=True)
+    heartbeat.start()
+    try:
+        yield True
+    finally:
+        finished.set()
+        os.close(lock_handle)
+        try:
+            os.unlink(lock_path)
+        except FileNotFoundError:
+            pass
 
 def align_prediction_to_target_template(predicted_atom_positions: Array, predicted_atom_mask: Array, template_atom_positions: Array, template_atom_mask: Array, flags: Array) -> Array:
     ca_atom_index = ATOM_INDEX['CA']
@@ -172,6 +230,11 @@ def trim_prediction_padding(value: Array, residue_count: int) -> Array:
         return value[:residue_count]
     return value[:residue_count, :residue_count]
 
+def reference_state_confidence(prediction: StructurePrediction, chain_names: dict[str, str], shared_chains: dict[str, Protein], state_chain_names: tuple[str, ...]) -> Array:
+    confidence_values = jnp.asarray(prediction.metrics['plddt'], dtype=jnp.float32)
+    per_chain = {chain_names.get(name, name): confidence_values[chain_slice] for name, chain_slice in chain_residue_slices(prediction.protein_complex).items()}
+    return jnp.concatenate([jnp.pad(per_chain[name], (0, len(shared_chains[name]) - len(per_chain[name]))) for name in state_chain_names])
+
 def protein_state_shapes(protein_states: ProteinStates) -> tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...]:
     complex_shapes = []
     for state_name in sorted(protein_states):
@@ -197,6 +260,28 @@ def alphafold_model_family(model_name: str) -> tuple:
         return ('multimer',)
     return 'monomer', tuple(sorted(af_config.CONFIG_DIFFS.get(model_name, {}).items()))
 
+ATTENTION_FALLBACK_BACKEND = 'chunked'
+GRADIENT_MEMORY_SHARE = 0.80
+BYTES_PER_GIB = 1 << 30
+
+def worker_memory_budget_bytes() -> float:
+    from bindcraft.design_workers import design_gpu_memory_gb, visible_design_gpus
+    fraction = float(os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION') or 0.75)
+    memory = design_gpu_memory_gb()
+    return fraction * min((memory[gpu][1] for gpu in visible_design_gpus() if gpu in memory), default=0.0) * BYTES_PER_GIB
+
+def executable_claimed_bytes(executable) -> float:
+    analysis = executable.memory_analysis()
+    return float(analysis.temp_size_in_bytes + analysis.argument_size_in_bytes + analysis.output_size_in_bytes)
+
+def executable_fits(executable) -> bool:
+    budget = worker_memory_budget_bytes()
+    return not budget or executable_claimed_bytes(executable) <= GRADIENT_MEMORY_SHARE * budget
+
+def is_out_of_memory(failure: BaseException) -> bool:
+    text = str(failure).lower()
+    return 'resource_exhausted' in text or 'out of memory' in text
+
 SUBBATCH_RESIDUE_THRESHOLD = 384
 LARGE_COMPLEX_SUBBATCH_SIZE = 4
 
@@ -206,7 +291,7 @@ def resolve_subbatch_size(residue_count: int, subbatch_size: int | None | str='a
     return LARGE_COMPLEX_SUBBATCH_SIZE if residue_count > SUBBATCH_RESIDUE_THRESHOLD else None
 
 class AlphaFoldDesignModel(DifferentiableProteinPredictor):
-    def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, large_complex_initialization: bool=False, amino_acid_bias: dict[str, float] | None=None):
+    def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, use_remat: bool=True, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, large_complex_initialization: bool=False, amino_acid_bias: dict[str, float] | None=None):
         self.cyclic_offset_mode = cyclic_offset_mode
         self.target_pad_length = target_pad_length
         self.multi_chain_binders = multi_chain_binders
@@ -224,6 +309,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         self.length_bucket_size = length_bucket_size
         self.attention_backend = accel.supported_attention_backend(attention_backend)
         self.use_cueq = use_cueq
+        self.use_remat = use_remat
         self.model_families: dict[str, tuple] = {}
         self.model_family_models: dict[tuple, str] = {}
         self.alphafold_runners: dict[tuple, af_model.RunModel] = {}
@@ -239,19 +325,24 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.model_parameters[model_name] = model_parameters
         self.prediction_compile_cache = CompiledModelCache(max_cache_size)
         self.gradient_compile_cache = CompiledModelCache(max_cache_size)
+        self.shape_attention_backend: dict = {}
+        self.executed_lengths: set[int] = set()
+        self.last_attention_backend = self.attention_backend
+        self.compiled_shapes: set = set()
 
-    def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None) -> af_model.RunModel:
-        runner_key = model_family, subbatch_size, self.attention_backend, self.use_cueq
+    def _alphafold_runner(self, model_family: tuple, subbatch_size: int | None, attention_backend: str | None=None) -> af_model.RunModel:
+        attention_backend = attention_backend or self.attention_backend
+        runner_key = model_family, subbatch_size, attention_backend, self.use_cueq, self.use_remat
         alphafold_runner = self.alphafold_runners.get(runner_key)
         if alphafold_runner is None:
             model_name = self.model_family_models[model_family]
             use_multimer = 'multimer' in model_name
             model_config = copy.deepcopy(af_config.model_config(model_name))
             model_config.model.global_config.use_dgram = False
-            model_config.model.global_config.use_remat = True
+            model_config.model.global_config.use_remat = self.use_remat
             model_config.model.global_config.bfloat16 = True
             model_config.model.global_config.subbatch_size = subbatch_size
-            model_config.model.global_config.attention_backend = self.attention_backend
+            model_config.model.global_config.attention_backend = attention_backend
             model_config.model.global_config.use_cueq = self.use_cueq
             model_config.model.num_recycle = 0
             alphafold_runner = af_model.RunModel(model_config, params=None, use_multimer=use_multimer)
@@ -287,11 +378,11 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.prediction_compile_cache.set(cache_key, compiled_prediction)
         return compiled_prediction
 
-    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0) -> StructurePredictions:
+    def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0, compile_only: bool=False, compile_blocking: bool=True) -> StructurePredictions:
         model = self._resolve_model_name(model)
-        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale) for name, protein_complex in protein_states.items()}
+        return {name: self._predict_complex(protein_complex, model, softmax_weight, one_hot_weight, temperature, logit_scale, compile_only, compile_blocking) for name, protein_complex in protein_states.items()}
 
-    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float) -> StructurePrediction:
+    def _predict_complex(self, protein_complex: dict[str, Protein], model: str, softmax_weight: float, one_hot_weight: float, temperature: float, logit_scale: float, compile_only: bool=False, compile_blocking: bool=True) -> StructurePrediction:
         chain_names = tuple(sorted(protein_complex))
         true_lengths = tuple(len(protein_complex[name]) for name in chain_names)
         padded_complex = padded_prediction_complex(protein_complex, self.length_bucket_size, self.target_pad_length) if self.target_pad_length else protein_complex
@@ -317,7 +408,17 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             entity_id = jnp.pad(entity_id, [0, padding_length], constant_values=len(chain_names))
             interface_asym_id = jnp.pad(interface_asym_id, [0, padding_length], constant_values=len(chain_names))
             seq_mask = jnp.pad(seq_mask, [0, padding_length])
-        positions, mask, metrics = self._compiled_complex_prediction(model, padded_residue_count)(self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
+        compiled_prediction = self._compiled_complex_prediction(model, padded_residue_count)
+        prediction_arguments = (self.model_parameters[model], self.key, sequence, atoms, atom_mask, residue_index, asym_id, entity_id, interface_asym_id, seq_mask, flags, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
+        prediction_shape = (self.model_families[model], padded_residue_count, resolve_subbatch_size(padded_residue_count, self.subbatch_size), self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.large_complex_initialization)
+        if prediction_shape not in self.compiled_shapes:
+            with one_worker_compiles(prediction_shape, compile_blocking) as compiling:
+                if compiling:
+                    compiled_prediction.lower(*prediction_arguments).compile()
+                    self.compiled_shapes.add(prediction_shape)
+        if compile_only:
+            return StructurePrediction(protein_complex=protein_complex, metrics={})
+        positions, mask, metrics = compiled_prediction(*prediction_arguments)
         positions, mask = positions[:residue_count], mask[:residue_count]
         metrics = {name: trim_prediction_padding(value, residue_count) for name, value in metrics.items()}
         positions = align_prediction_to_target_template(positions, mask, atoms[:residue_count], atom_mask[:residue_count], flags[:residue_count])
@@ -327,14 +428,23 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             metrics = trim_padded_metrics(metrics, real_residue_positions(chain_lengths, true_lengths))
         return StructurePrediction(protein_complex=predicted_complex, metrics=metrics)
 
-    def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss]) -> Callable:
+    def _fall_back_to_chunked(self, model: str, complex_shapes: tuple, reference_shapes: tuple, losses: dict[str, DesignLoss], gradient_arguments: tuple, shape_signature: tuple, residue_total: int, reason: str) -> Callable:
+        print(f'{self.attention_backend} attention {reason} at {residue_total} padded residues; using the {ATTENTION_FALLBACK_BACKEND} route for this shape instead', flush=True)
+        self.shape_attention_backend[shape_signature] = ATTENTION_FALLBACK_BACKEND
+        compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, ATTENTION_FALLBACK_BACKEND)
+        #compiled inside the caller lock, not on first call
+        compiled_gradient.lower(*gradient_arguments).compile()
+        return compiled_gradient
+
+    def _compiled_sequence_gradients(self, model: str, complex_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], reference_shapes: tuple[tuple[str, tuple[str, ...], tuple[int, ...]], ...], losses: dict[str, DesignLoss], attention_backend: str | None=None) -> Callable:
         model_family = self.model_families[model]
         loss_signature = tuple((name, losses[name].function, losses[name].required_states) for name in sorted(losses))
         state_subbatch_sizes = tuple((state_name, resolve_subbatch_size(sum(chain_lengths), self.subbatch_size)) for state_name, _, chain_lengths in complex_shapes)
-        cache_key = model_family, complex_shapes, reference_shapes, loss_signature, state_subbatch_sizes, self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.large_complex_initialization
+        attention_backend = attention_backend or self.attention_backend
+        cache_key = model_family, complex_shapes, reference_shapes, loss_signature, state_subbatch_sizes, self.multi_chain_binders, self.num_recycle, self.target_flexibility, self.large_complex_initialization, attention_backend
         compiled_gradient = self.gradient_compile_cache.get(cache_key)
         if compiled_gradient is None:
-            state_alphafold_runners = {state_name: self._alphafold_runner(model_family, subbatch_size) for state_name, subbatch_size in state_subbatch_sizes}
+            state_alphafold_runners = {state_name: self._alphafold_runner(model_family, subbatch_size, attention_backend) for state_name, subbatch_size in state_subbatch_sizes}
             def predict_complex_arrays(alphafold_runner: af_model.RunModel, model_parameters: Array, key: Array, chain_names: tuple[str, ...], chain_lengths: tuple[int, ...], sequence: Array, atoms: Array, atom_mask: Array, flags: Array, residue_index: Array, dropout: Array, softmax_weight: Array, one_hot_weight: Array, temperature: Array, logit_scale: Array):
                 asym_id = residue_chain_ids(chain_lengths)
                 entity_id = residue_entity_ids(chain_names, chain_lengths, self.multi_chain_binders)
@@ -365,11 +475,11 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 for state_name, state_chain_names, chain_lengths in reference_shapes:
                     template = reference_templates[state_name]
                     chain_arrays = split_residue_arrays_by_chain(state_chain_names, chain_lengths, sequence=jnp.concatenate([sequences[name] for name in state_chain_names], axis=0), atoms=template['atoms'], atom_mask=template['atom_mask'], flags=template['flags'], residue_index=template['residue_index'])
-                    loss_predictions[state_name] = StructurePrediction(protein_complex={name: Protein(**chain_arrays[name]) for name in state_chain_names}, metrics={})
+                    loss_predictions[state_name] = StructurePrediction(protein_complex={name: Protein(**chain_arrays[name]) for name in state_chain_names}, metrics={'plddt': template['plddt']})
                 weighted_losses = {name: weights[name] * entry.function(protein_states, loss_predictions, **frozen_interfaces.get(name, {})) for name, entry in losses.items()}
                 total_loss = sum(weighted_losses.values()) if weighted_losses else jnp.asarray(0.0)
                 for name, entry in losses.items():
-                    for state_name in entry.required_states or prediction_arrays.keys():
+                    for state_name in (entry.required_states or prediction_arrays.keys()) & prediction_arrays.keys():
                         metrics = prediction_arrays[state_name][2]
                         if name in metrics:
                             raise ValueError(f'loss {name!r} would overwrite an existing metric on {state_name!r}')
@@ -379,7 +489,7 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
             self.gradient_compile_cache.set(cache_key, compiled_gradient)
         return compiled_gradient
 
-    def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False) -> tuple[StructurePredictions, dict[str, Array]]:
+    def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False, compile_blocking: bool=True) -> tuple[StructurePredictions, dict[str, Array]]:
         model = self._resolve_model_name(model)
         _, original_shared_chains = collect_shared_chains(protein_states)
         state_names = canonical_state_names(protein_states)
@@ -396,16 +506,39 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         reference_states = {state_names.get(state, state): {chain_names.get(name, name): protein.padded_to(len(shared_chains[chain_names.get(name, name)])) for name, protein in prediction.protein_complex.items() if chain_names.get(name, name) in shared_chains} for state, prediction in (reference_predictions or {}).items()}
         reference_states = {state: protein_complex for state, protein_complex in reference_states.items() if protein_complex}
         reference_shapes = protein_state_shapes(reference_states)
-        reference_templates = {state_name: concatenate_chain_arrays(state_chain_names, reference_states[state_name], 'atoms', 'atom_mask', 'flags', 'residue_index') for state_name, state_chain_names, _ in reference_shapes}
+        reference_confidence = {state_names.get(state, state): prediction for state, prediction in (reference_predictions or {}).items()}
+        reference_templates = {state_name: {**concatenate_chain_arrays(state_chain_names, reference_states[state_name], 'atoms', 'atom_mask', 'flags', 'residue_index'), 'plddt': reference_state_confidence(reference_confidence[state_name], chain_names, shared_chains, state_chain_names)} for state_name, state_chain_names, _ in reference_shapes}
         weights = {name: jnp.asarray(entry.weight, dtype=jnp.float32) for name, entry in losses.items()}
         frozen_interfaces = frozen_interface_arguments(losses, shared_chains)
-        compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses)
+        shape_signature = self.model_families[model], complex_shapes, reference_shapes
+        residue_total = sum(sum(chain_lengths) for _, _, chain_lengths in complex_shapes)
+        attention_backend = self.shape_attention_backend.get(shape_signature, self.attention_backend)
+        compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
-        with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses)))):
-            compiled_sequence_gradients.lower(*gradient_arguments).compile()
+        if shape_signature not in self.shape_attention_backend:
+            with one_worker_compiles((model, complex_shapes, reference_shapes, tuple(sorted(losses))), compile_blocking) as compiling:
+                if compiling:
+                    executable = compiled_sequence_gradients.lower(*gradient_arguments).compile()
+                    self.shape_attention_backend[shape_signature] = attention_backend
+                    if attention_backend != ATTENTION_FALLBACK_BACKEND and not executable_fits(executable):
+                        attention_backend = ATTENTION_FALLBACK_BACKEND
+                        compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'needs more than this worker may allocate')
+        self.last_attention_backend = attention_backend
         if compile_only:
             return {}, {}, jnp.asarray(0.0)
-        (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
+        try:
+            (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
+            if residue_total not in self.executed_lengths:
+                jax.block_until_ready(((design_loss, prediction_arrays), shared_chain_gradients))
+                self.executed_lengths.add(residue_total)
+        except Exception as gradient_failure:
+            if attention_backend == ATTENTION_FALLBACK_BACKEND or not is_out_of_memory(gradient_failure):
+                raise
+            compiled_sequence_gradients = self._fall_back_to_chunked(model, complex_shapes, reference_shapes, losses, gradient_arguments, shape_signature, residue_total, 'ran out of memory despite fitting the check')
+            self.last_attention_backend = ATTENTION_FALLBACK_BACKEND
+            (design_loss, prediction_arrays), shared_chain_gradients = compiled_sequence_gradients(*gradient_arguments)
+            jax.block_until_ready(((design_loss, prediction_arrays), shared_chain_gradients))
+            self.executed_lengths.add(residue_total)
         predictions: StructurePredictions = {}
         for canonical_state, canonical_chains, chain_lengths in complex_shapes:
             state_name = state_source_names[canonical_state]

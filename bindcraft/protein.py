@@ -234,7 +234,7 @@ class Protein:
         sequence, residue_flags = self.sequence.tolist(), [int(residue_flag) for residue_flag in self.flags]
         atom_positions, atom_mask = self.atoms.tolist(), self.atom_mask.tolist()
         unresolved_atom_positions, unresolved_atom_mask = [[0.0] * 3] * len(ATOM_NAMES), [False] * len(ATOM_NAMES)
-        designed_residue_count = sum(scaffold_edit[2] for scaffold_edit in scaffold_edits)
+        designed_residue_count = sum(scaffold_edit[2] for scaffold_edit in scaffold_edits if scaffold_edit[3] & ResidueFlags.DESIGN)
         designed_sequence_logits = (0.01 * jax.random.normal(sequence_random_key, (designed_residue_count, len(AMINO_ACIDS)))).tolist()
         designed_residue_position = 0
         edited_residue_indices, edited_sequence, edited_atom_positions, edited_atom_mask, edited_residue_flags = [], [], [], [], []
@@ -247,6 +247,17 @@ class Protein:
                 edited_atom_mask.append(atom_mask[scaffold_residue_position])
                 edited_residue_flags.append(residue_flags[scaffold_residue_position])
                 scaffold_residue_position += 1
+            if not edit_flags & ResidueFlags.DESIGN:
+                if replacement_length != end - start + 1:
+                    raise ValueError(f'residue span {start}-{end} asks for a replacement length while dropping DESIGN; a held span keeps the residues the scaffold has')
+                while scaffold_residue_position < len(residue_index) and residue_index[scaffold_residue_position] <= end:
+                    edited_residue_indices.append(residue_index[scaffold_residue_position] + residue_number_shift)
+                    edited_sequence.append(sequence[scaffold_residue_position])
+                    edited_atom_positions.append(atom_positions[scaffold_residue_position])
+                    edited_atom_mask.append(atom_mask[scaffold_residue_position])
+                    edited_residue_flags.append(residue_flags[scaffold_residue_position] | int(edit_flags))
+                    scaffold_residue_position += 1
+                continue
             replacement_residue_start = start + residue_number_shift
             while scaffold_residue_position < len(residue_index) and residue_index[scaffold_residue_position] <= end:
                 scaffold_residue_position += 1

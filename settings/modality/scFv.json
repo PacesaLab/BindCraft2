@@ -1,7 +1,8 @@
 {
   "description": "Heavy and light variable domains as two chains; no linker is designed",
   "binder_scaffold": "scaffolds/scFv.cif",
-  "mutate_positions": "L30-32,L91-94,L96,H31-33,H50,H52-55(4-6),H57,H59,H99-106(5-18),H72*",
+  "mutate_positions": "L24-29!,L30-32,L33-34!,L50-56!,L89-90!,L91-94,L95!,L96,L97!,H26-30!,H31-33,H34-35!,H50,H51!,H52-55(4-6),H56!,H57,H58!,H59,H60-65!,H72*,H95-98!,H99-106(5-18)",
+  "losses": {"binder_coldspot": {"params": {"designed_only": false}}},
   "design_models": 3,
   "validation_model": "multimer",
   "min_scaffold_sequence_retained_final": 1.0,

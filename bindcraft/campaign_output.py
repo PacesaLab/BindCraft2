@@ -7,6 +7,7 @@ import csv
 import math
 import os
 import re
+import platform
 import shutil
 import statistics
 import subprocess
@@ -130,7 +131,7 @@ def append_metric_row(csv_path: str, row: dict) -> None:
             column_names = list(reader.fieldnames or [])
     column_names = ordered_csv_columns(column_names + [name for name in row if name not in column_names])
     os.makedirs(os.path.dirname(csv_path) or '.', exist_ok=True)
-    partial_path = f'{csv_path}.partial'
+    partial_path = f'{csv_path}.{platform.node()}.{os.getpid()}.partial'
     with open(partial_path, 'w', newline='') as metrics_file:
         writer = csv.DictWriter(metrics_file, fieldnames=column_names, restval='')
         writer.writeheader()
@@ -160,14 +161,19 @@ class CampaignProgress:
         os.makedirs(project_folder, exist_ok=True)
 
     def recovered_state(self) -> dict:
-        return {'trajectories': csv_row_count(stage_table(self.project_folder, TRAJECTORY_STAGE)), 'accepted': csv_row_count(accepted_table(self.project_folder)), 'rejections': recorded_rejections(self.project_folder), 'attempted': sorted(designed_recipe_hashes(self.project_folder))}
+        return {'trajectories': csv_row_count(stage_table(self.project_folder, TRAJECTORY_STAGE)), 'accepted': csv_row_count(accepted_table(self.project_folder)), 'rejections': recorded_rejections(self.project_folder)}
 
     @contextmanager
     def locked_progress(self):
         with locked_campaign_folder(self.state_path):
-            state = json.loads(Path(self.state_path).read_text()) if os.path.exists(self.state_path) else self.recovered_state()
+            try:
+                state = json.loads(Path(self.state_path).read_text())
+            except (OSError, ValueError) as unreadable:
+                if os.path.exists(self.state_path):
+                    print(f'campaign state rebuilt from the recorded tables: {self.state_path} was not readable ({unreadable})', flush=True)
+                state = self.recovered_state()
             yield state
-            partial_path = f'{self.state_path}.partial'
+            partial_path = f'{self.state_path}.{platform.node()}.{os.getpid()}.partial'
             Path(partial_path).write_text(json.dumps(state, sort_keys=True))
             os.replace(partial_path, self.state_path)
 
@@ -179,14 +185,6 @@ class CampaignProgress:
                 return None
             state['trajectories'] += 1
             return state['trajectories'], state['accepted']
-
-    def claim_recipe(self, identity: str) -> bool:
-        with self.locked_progress() as state:
-            attempted = state.setdefault('attempted', sorted(designed_recipe_hashes(self.project_folder)))
-            if identity in attempted:
-                return False
-            attempted.append(identity)
-            return True
 
     def record_accepted_design(self) -> int:
         with self.locked_progress() as state:
@@ -213,9 +211,6 @@ class CampaignProgress:
             rejections['candidates_rejected'] += 1 if failed_filters else 0
             for name in failed_filters:
                 rejections['failed_filters'][name] = rejections['failed_filters'].get(name, 0) + 1
-
-def designed_recipe_hashes(project_folder: str) -> set[str]:
-    return {row['hash'] for row in read_metric_rows(stage_table(project_folder, TRAJECTORY_STAGE)) if row.get('hash')}
 
 def redesigned_binder_sequences(project_folder: str) -> set[str]:
     return {row['Binder_Sequence'].replace('/', '') for path in (stage_table(project_folder, REFOLD_STAGE), accepted_table(project_folder))
@@ -350,6 +345,15 @@ def trajectory_metric_means(metric_rows: list[dict]) -> dict[tuple[str, str], fl
 def summary_row(campaign: str, scope: str, metric: str, values: list[float]) -> dict:
     return {'campaign': campaign, 'scope': scope, 'metric': metric, 'samples': len(values), 'mean': statistics.fmean(values), 'std': statistics.pstdev(values) if len(values) > 1 else 0.0, 'min': min(values), 'max': max(values)}
 
+def claimed_trajectory_directory(trajectory_directory: str) -> bool:
+    if os.path.exists(f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'):
+        return False
+    try:
+        os.makedirs(trajectory_directory)
+        return True
+    except FileExistsError:
+        return False
+
 def trajectory_directories(project_folder: str) -> list[str]:
     trajectories_directory = stage_folder(project_folder, TRAJECTORY_STAGE)
     return [os.path.join(trajectories_directory, name) for name in sorted(os.listdir(trajectories_directory)) if os.path.isdir(os.path.join(trajectories_directory, name))] if os.path.isdir(trajectories_directory) else []
@@ -377,7 +381,7 @@ def archive_trajectory_folder(trajectory_directory: str) -> str | None:
     if not os.path.isdir(trajectory_directory):
         return None
     archive_path = f'{trajectory_directory}{TRAJECTORY_ARCHIVE_SUFFIX}'
-    partial_path = f'{archive_path}.partial'
+    partial_path = f'{archive_path}.{platform.node()}.{os.getpid()}.partial'
     with zipfile.ZipFile(partial_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for directory, _, filenames in os.walk(trajectory_directory):
             for filename in sorted(filenames):
@@ -438,7 +442,7 @@ def summarize_campaign(project_folder: str, campaign: str | None=None) -> list[d
 
 def write_csv_rows(rows: list[dict], path: str, column_names=SUMMARY_FIELDS) -> str:
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-    partial_path = f'{path}.partial'
+    partial_path = f'{path}.{platform.node()}.{os.getpid()}.partial'
     with open(partial_path, 'w', newline='') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=list(column_names))
         writer.writeheader()
@@ -465,7 +469,7 @@ def check_file_belongs_to_design(path: Path, design: str) -> bool:
     return stem == design or stem.startswith(f'{design}_')
 
 def accepted_structure_present(rank_folder: str, design: str) -> bool:
-    written = [path for path in Path(folder).iterdir() if path.is_file() and check_file_belongs_to_design(path, design) and path.suffix.lower() == '.cif']
+    written = [path for path in Path(rank_folder).iterdir() if path.is_file() and check_file_belongs_to_design(path, design) and path.suffix.lower() == '.cif']
     return any(not unranked_name(path.name).endswith('_monomer.cif') for path in written)
 
 def rename_ranked_structures(rank_folder: str, ranked_rows: list[dict]) -> None:
