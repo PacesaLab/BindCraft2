@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import tempfile
-from bindcraft.af2 import GRADIENT_MEMORY_SHARE, campaign_length_bucket, padded_prediction_length, worker_memory_budget_bytes
+from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
 from bindcraft.protein_preparation import design_residue_count
 from bindcraft.settings import build_design_settings
@@ -143,15 +143,7 @@ def worker_cpu_slices(worker_count: int) -> list[list[int]]:
     share = len(cpus) // worker_count
     return [cpus[index * share:(index + 1) * share] for index in range(worker_count)]
 
-UNSHARDED_BYTES_PER_RESIDUE_PAIR = 47952
 PACKED_LAUNCH_STAGGER_SECONDS = 0.0
-
-def campaign_subbatch_size(settings: dict, residue_count: int | None) -> int | None | str:
-    requested = settings.get('subbatch_size', 'auto')
-    if requested != 'auto' or not residue_count:
-        return requested
-    budget = worker_memory_budget_bytes()
-    return None if not budget or UNSHARDED_BYTES_PER_RESIDUE_PAIR * residue_count ** 2 <= GRADIENT_MEMORY_SHARE * budget else requested
 
 def design_worker_launch_stagger(settings: dict) -> float:
     return float(os.environ.get('BINDCRAFT_WORKER_LAUNCH_STAGGER', settings.get('worker_launch_stagger', PACKED_LAUNCH_STAGGER_SECONDS)))
