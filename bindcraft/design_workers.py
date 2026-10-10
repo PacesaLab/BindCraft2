@@ -110,7 +110,7 @@ def host_memory_worker_ceiling(gpu_count: int) -> int:
 
 def cgroup_cpu_quota() -> int:
     #mostly for docker
-    try
+    try:
         quota, period = open('/sys/fs/cgroup/cpu.max').read().split()
         if quota != 'max':
             return max(1, int(int(quota) / int(period)))
@@ -196,7 +196,7 @@ def plan_design_workers(settings: dict, residue_count: int | None=None, trajecto
         for worker, memory_fraction in zip(packed, design_worker_memory_fractions(*gpu_memory.get(gpu, (0.0, 0.0)), needed_gb)):
             worker['memory_fraction'] = memory_fraction
         for worker, cpus in zip(plan, worker_cpu_slices(len(plan))):
-        worker['cpus'] = cpus
+            worker['cpus'] = cpus
     return plan
 
 BLOCK_OPENING = '=== trajectory '
