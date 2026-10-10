@@ -32,7 +32,7 @@ Each layer overrides the ones above it in the table. A target therefore wins ove
 
 ### Every setting at its default
 
-`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 235 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
+`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 237 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
 
 ### Paths
 
@@ -188,13 +188,15 @@ Detargeting only checks the off-targets supplied. Use `targets[].objective: "det
 
 ### Conformational design
 
-`induced_fit` requests movement of the binding surface; `fold_switch` requests a whole-fold difference between free and bound structures. Both presets require one target. `binder_shapes` instead specifies groups of states sharing a conformation, e.g. `[["hPDL1"],["binder_alone"]]`, used by `weights_fold_switching`. Structural differences do not establish switching kinetics or thermodynamic preference.
+`induced_fit` requests movement of the binding surface; `fold_switch` requests a whole-fold difference between free and bound structures. `induced_fit` requires exactly one target, because its binder-alone block freezes one bound structure; `fold_switch` carries no such restriction. `binder_shapes` instead specifies groups of states sharing a conformation, e.g. `[["hPDL1"],["binder_alone"]]`, used by `weights_fold_switching`. Structural differences do not establish switching kinetics or thermodynamic preference.
 
 | Setting | Default | Why change it |
 | --- | --- | --- |
 | `binder_shapes` | Unset | Define explicit conformation groups. |
+| `confidence_floor` | 0.7 | Lowest predicted confidence a residue may have and still count toward a conformational comparison. One campaign-wide value, read by both conformational objectives and all three conformational checks, so the gradient and the gate judge the same residues. |
 | `induced_fit_delta`, `induced_fit_interface_cutoff` | Objective 3 Å; preset 5 Å, 8 Å | Desired interface RMSD and distance defining the interface. |
 | `induced_fit_tm_target` | 0.6 | Desired ceiling on similarity between whole folds. |
+| `max_induced_fit_tm_final`, `min_induced_fit_rmsd_final`, `min_induced_fit_interface_rmsd_final` | 0.85, 1 Å, 2 Å | Acceptance gates for a conformational change. These apply whether the modality is named or the objective is weighted by hand. |
 | `induced_fit_monomer_steps` | 30 | Maximum unbound-binder optimisation steps in each induced-fit block. |
 | `induced_fit_monomer_chunk` | 5 | Steps between confidence checks in that block. |
 | `induced_fit_monomer_plddt` | 0.7 | Confidence goal for adaptive stopping. |
@@ -208,9 +210,9 @@ Detargeting only checks the off-targets supplied. Use `targets[].objective: "det
 
 | Setting | Default | Why change it |
 | --- | --- | --- |
-| `initial_guess` / `--initial-guess` | false | Start the re-prediction of each redesigned candidate from the pose the trajectory folded. The gradient stages are untouched, and a binder folded from nothing reaches it the same way a scaffold does, because ProteinMPNN decodes onto the predicted backbone. Measured on 17 matched candidates it raised binder pLDDT on every one and left interface pTM and pAE flat to slightly worse, so it is off by default. Rungs 1, 3 and 5 to 7 of the [desperation ladder](#the-desperation-ladder) turn it on. |
-| `bigbang` / `--bigbang` | false | Property flag that sets `bigbang_initialization`. |
-| `bigbang_initialization` | false | Also start the gradient stages from the coordinates on hand, so the target begins folded in its own frame while a binder folded from nothing still springs from the origin. Measured to cost a campaign: 20 of 20 trajectories died at screen at a binder pLDDT of 0.56 to 0.59 where flexibility alone put 5 of 6 past screen at 0.81, and seeding a VHH trajectory, which does have coordinates to start from, lost pLDDT and interface pTM on 6 of 6. Not on the desperation ladder, and not changed by the autotuner. |
+| `hard_target` / `--hard-target` | false | Start the re-prediction of each redesigned candidate from the pose the trajectory folded. The gradient stages are untouched, and a binder folded from nothing reaches it the same way a scaffold does, because ProteinMPNN decodes onto the predicted backbone. Measured on 17 matched candidates it raised binder pLDDT on every one and left interface pTM and pAE flat to slightly worse, so it is off by default. Rungs 1, 3 and 5 to 7 of the [desperation ladder](#the-desperation-ladder) turn it on. |
+| `large_complex` / `--large-complex` | false | Property flag that sets `large_complex_initialization`. |
+| `large_complex_initialization` | false | Also start the gradient stages from the coordinates on hand, so the target begins folded in its own frame while a binder folded from nothing still springs from the origin. Measured to cost a campaign: 20 of 20 trajectories died at screen at a binder pLDDT of 0.56 to 0.59 where flexibility alone put 5 of 6 past screen at 0.81, and seeding a VHH trajectory, which does have coordinates to start from, lost pLDDT and interface pTM on 6 of 6. Not on the desperation ladder, and not changed by the autotuner. |
 | `target_flexibility` | 0 | Fraction of templated target residues whose sequence and sidechain information are withheld, while retaining their backbone. Increase only when target-side flexibility is part of the experiment. |
 
 ### Peptide and domain controls
@@ -294,9 +296,8 @@ The table lists every objective. Default weights describe the standard binder be
 | `weights_n_terminus_away` | off | Direct the N terminus away from the target. |
 | `weights_c_terminus_away` | off | Direct the C terminus away from the target. |
 | `weights_disulfide` | off | Charge for every cysteine left without a partner. The loss reads in free cysteines, so a weight of 1.0 prices one unpaired cysteine at 1.0. |
-| `weights_induced_fit_global` | off | Whole-fold difference between free and bound structures. |
+| `weights_fold_switching` | off | Whole-fold difference between the prediction state and its reference state: bound versus binder-alone by default, or the explicit conformation groups when `binder_shapes` names them. Asks for both a TM-score below `induced_fit_tm_target` and at least `fold_switch_delta` Angstroms of movement, measured on the confidently predicted fold. |
 | `weights_induced_fit_interface` | off | Movement of the binding surface relative to the binder core. |
-| `weights_fold_switching` | off | Difference between explicit conformation groups. |
 | `weights_collective_softness` | off | Favour a shared collective hinge motion over local floppiness. |
 | `weights_multidomain` | off | Separate, compact domains connected by a linker. |
 
@@ -326,9 +327,8 @@ Shared selectors are `prediction_state` (which prepared target or `binder_alone`
 | `non_helical` | `cutoff=6.0` |
 | `termini_distance` | `threshold_distance=7.0` |
 | `disulfide` | `distance=3.8`, `sigma=1.5`, `sequence_separation=3`, `temperature=0.1` |
-| `induced_fit_global` | `tm_target=0.6` |
-| `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None` |
-| `fold_switching` | `binder_shapes=()`, `tm_target=0.6` |
+| `fold_switching` | `tm_target=0.6`, `rmsd_target=1.0`, `prediction_state='complex'`, `reference_state='binder_alone'`, `chain='binder'` |
+| `induced_fit_interface` | `interface_rmsd_target=3.0`, `cutoff=8.0`, `interface_mask=None`, `reference_state='binder_alone'` |
 | `collective_softness` | `contact_decay=8.0`, `damping=0.01`, `power_iterations=12`, `eps=1e-08` |
 | `multidomain` | `domain_ids=()`, `n_domains=2`, `min_domain_size=50`, `max_domain_size=180`, `max_domains=2`, `seed=0`, `domain_rg_weight=0.3`, `domain_sep_weight=0.0`, `domain_contact_cutoff=8.0`, `domain_pae_margin=0.15`, `domain_linker_gap=0.1`, `domain_linker_sharpness=0.03`, `domain_linker_helix_weight=0.0` |
 
@@ -384,6 +384,7 @@ The shortcuts below turn the corresponding acceptance requirement into a floor (
 | `min_framework_packing_final` | `Framework_Packing_Fraction` — require loops to cover the non-binding face. |
 | `min_hotspot_contact_final` | `Hotspot_Contact_Fraction` — require coverage of named hotspots. |
 | `min_induced_fit_interface_rmsd_final` | `Induced_Fit_Interface_RMSD` — require movement of the binding surface. |
+| `min_induced_fit_rmsd_final` | `Induced_Fit_RMSD` — require the fold itself to move, in Angstroms, measured on the confidently predicted residues. |
 | `min_interface_buried_area_final` | `Interface_BuriedArea` — require a minimum binder-side buried area. |
 | `min_receptor_chains_contacted_final` | `Receptor_Chains_Contacted` — require engagement of several receptor chains. |
 | `min_scaffold_sequence_retained_final` | `Scaffold_Sequence_Retained_Fraction` — retain held scaffold sequence. |
@@ -404,7 +405,7 @@ Off-target stage ceilings use `max_detarget_iptm_<stage>`, and acceptance reject
 | `desperation_trajectories` | 750 | Trajectories since the last accepted design before the first rung of that ladder is taken. |
 | `parameter_sweep` | Absent | Compare controlled variants of selected settings; `true` uses default axes, or supply the object below. |
 
-The autotuner reviews blocks of ten trajectories and moves two things only: the screen and refine stage lengths, each held between half and twice the length the campaign configured, and, where `autotune_loss_weights` is set, the `weights_*` the campaign changed itself. An alternated weight returns to the campaign's own value as soon as a design is accepted. The autotuner never touches recycles, target flexibility, the validation pool, `initial_guess` or `bigbang_initialization`. Its values live in `.campaign_state.json`, and each trajectory's `autotuned` column records what had been moved when it ran.
+The autotuner reviews blocks of ten trajectories and moves two things only: the screen and refine stage lengths, each held between half and twice the length the campaign configured, and, where `autotune_loss_weights` is set, the `weights_*` the campaign changed itself. An alternated weight returns to the campaign's own value as soon as a design is accepted. The autotuner never touches recycles, target flexibility, the validation pool, `hard_target` or `large_complex_initialization`. Its values live in `.campaign_state.json`, and each trajectory's `autotuned` column records what had been moved when it ran.
 
 ### The desperation ladder
 
@@ -412,17 +413,17 @@ The autotuner reviews blocks of ten trajectories and moves two things only: the 
 
 | Rung | Runs at |
 | --- | --- |
-| 1 | `initial_guess` |
+| 1 | `hard_target` |
 | 2 | `target_flexibility` 0.5 |
-| 3 | `initial_guess`, `target_flexibility` 0.5 |
+| 3 | `hard_target`, `target_flexibility` 0.5 |
 | 4 | `validation_model` `multimer` |
-| 5 | `validation_model` `multimer`, `initial_guess` |
-| 6 | `validation_model` `multimer`, `initial_guess`, `target_flexibility` 0.5 |
-| 7 | `validation_model` `multimer`, `initial_guess`, `target_flexibility` 0.5, `design_recycles` 3 |
+| 5 | `validation_model` `multimer`, `hard_target` |
+| 6 | `validation_model` `multimer`, `hard_target`, `target_flexibility` 0.5 |
+| 7 | `validation_model` `multimer`, `hard_target`, `target_flexibility` 0.5, `design_recycles` 3 |
 
-The initial guess and the flexibility are tried alone before they are tried together, so a rung that works says which change bought the design. Rungs 4 to 6 move validation off the held-back monomer models onto held-out multimer models, splitting the multimer pool 3 to design and 2 to validate, for a target whose interface the monomer models cannot resolve. More recycles come last because they cost only time; a campaign that already asks for more than three keeps its own count. The rung is read off the campaign's own tables, so every worker and a resumed campaign stand on the same one, and a `trajectory_only` campaign never climbs at all.
+The hard target and the flexibility are tried alone before they are tried together, so a rung that works says which change bought the design. Rungs 4 to 6 move validation off the held-back monomer models onto held-out multimer models, splitting the multimer pool 3 to design and 2 to validate, for a target whose interface the monomer models cannot resolve. More recycles come last because they cost only time; a campaign that already asks for more than three keeps its own count. The rung is read off the campaign's own tables, so every worker and a resumed campaign stand on the same one, and a `trajectory_only` campaign never climbs at all.
 
-**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the initial guess reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
+**A design accepted on a rung was accepted against an easier design task, judged by a validation loosened to match, and nothing about a wet-lab experiment is loosened with it.** Flexibility and the hard target reach both predictors deliberately, because a binder that folds only against a loosened target would otherwise pass every design filter and then be failed by a rigid validation. Treat such a design as a weaker candidate than one accepted at the settings the campaign asked for. The campaign log prints a `desperation:` line naming the rung and the settings it runs at on every trajectory the ladder applies to, and those same settings appear in that trajectory's `autotuned` column in `1_Trajectories/!_Trajectories.csv`. `--core benchmark` switches `desperation` and `autotune` off together, with a fixed `campaign_seed`, which is what a controlled comparison needs; see `settings/core/benchmark.json` in your BindCraft2 repo and [input tiers](#input-tiers-and-overrides).
 
 ```json
 {
@@ -475,7 +476,8 @@ A sweep needs `max_trajectories`, divides its budget between arms, and disables 
 | `length_bucket_size` | 32 | Pad lengths to reuse compiled calculations; 1 disables padding. |
 | `compile_next_length` | true | Prepare the next length while the current trajectory runs. |
 | `subbatch_size` | `auto` | Split large calculations to reduce memory; an integer fixes the chunk size, `null` disables chunking. |
-| `attention_backend` | `auto` | Choose attention implementation; leave automatic unless diagnosing performance. |
+| `attention_backend` | `auto` | Choose attention implementation: `auto`, `cudnn`, `chunked` or `stock`. `auto` uses cuDNN where it works and `chunked` otherwise, and demotes any single design shape to `chunked` when its compiled gradient would not fit the worker budget. Leave automatic unless diagnosing performance. |
+| `mutate_gate_draws` | `1` | How many predictions the mutate-stage gate averages over. The mutate gate judges a single fresh draw, which samples one AF2 model at random and is noisier than the four gates before it; raising this takes the best of several draws at the cost of that many extra predictions per trajectory. |
 | `use_cueq` | false | Enable optional cuEquivariance kernels when installed. |
 | `auto_multi_gpu` | true | Use the visible GPU allocation automatically; false keeps a single process. |
 | `workers_per_gpu`, `max_workers_per_gpu` | `auto`, 8 | Set or cap concurrent design workers per card. |
