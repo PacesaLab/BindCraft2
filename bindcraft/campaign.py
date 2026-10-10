@@ -259,6 +259,7 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)
     if selected_models.validation_pool_exhausted:
         print(f'validation held out on the monomer pool {selected_models.validation_models}: the {len(selected_models.design_models)} design models leave nothing of the multimer pool for a held-out validation set', flush=True)
+    subbatch_size = settings.get('subbatch_size', 'auto')
     attention_backend = settings.get('attention_backend', 'auto')
     use_cueq = bool(settings.get('use_cueq', False))
     use_remat = bool(settings.get('use_remat', True))
@@ -324,6 +325,7 @@ def campaign_design_plan(settings: dict) -> CampaignDesignPlan:
     design_settings = build_design_settings(settings)
     target_lengths = {len(protein) for protein in prepare_targets(design_settings, longest_crop=True).values()}
     return CampaignDesignPlan(design_settings=design_settings,
+                              subbatch_size=settings.get('subbatch_size', 'auto'),
                               attention_backend=settings.get('attention_backend', 'auto'),
                               use_cueq=bool(settings.get('use_cueq', False)),
                               use_remat=bool(settings.get('use_remat', True)),
