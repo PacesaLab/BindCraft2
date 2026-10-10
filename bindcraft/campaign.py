@@ -10,7 +10,7 @@ from bindcraft.design_identity import design_hash, design_name
 from bindcraft.parameter_sweep import arm_trajectory_budget, autotuned_settings, autotuned_stamp, parameter_sweep_arms, parameter_sweep_options, sweep_block_budgets, write_sweep_record
 from bindcraft.MPNN_stage import redesign_and_validate_binders
 from bindcraft.filters import INTERFACE_PDAE_METRICS, all_atom_clashes_metric, backbone_clashes_metric, binder_chain_sequences, design_sequence_report, design_stage_filters, evaluate_design_filters, residue_confidence_tracks
-from bindcraft.design_workers import campaign_subbatch_size, dispatch_design_workers, running_as_design_worker
+from bindcraft.design_workers import dispatch_design_workers, running_as_design_worker
 from bindcraft.desperation import desperate_settings
 from bindcraft.loss import DISTOGRAM_DEPENDENT_LOSSES
 from bindcraft.model_weights import model_weights
@@ -259,7 +259,6 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)
     if selected_models.validation_pool_exhausted:
         print(f'validation held out on the monomer pool {selected_models.validation_models}: the {len(selected_models.design_models)} design models leave nothing of the multimer pool for a held-out validation set', flush=True)
-    subbatch_size = campaign_subbatch_size(settings, design_residue_count(settings))
     attention_backend = settings.get('attention_backend', 'auto')
     use_cueq = bool(settings.get('use_cueq', False))
     use_remat = bool(settings.get('use_remat', True))
@@ -325,7 +324,6 @@ def campaign_design_plan(settings: dict) -> CampaignDesignPlan:
     design_settings = build_design_settings(settings)
     target_lengths = {len(protein) for protein in prepare_targets(design_settings, longest_crop=True).values()}
     return CampaignDesignPlan(design_settings=design_settings,
-                              subbatch_size=campaign_subbatch_size(settings, design_residue_count(settings)),
                               attention_backend=settings.get('attention_backend', 'auto'),
                               use_cueq=bool(settings.get('use_cueq', False)),
                               use_remat=bool(settings.get('use_remat', True)),
