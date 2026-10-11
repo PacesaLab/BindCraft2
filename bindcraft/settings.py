@@ -12,6 +12,7 @@ from bindcraft.loss import BINDER_ALONE_LOSS_NAMES, PROTOMER_SCOPED_LOSSES, REGI
 from bindcraft.model_weights import DEFAULT_MPNN_MODEL, DEFAULT_MPNN_VARIANT
 from bindcraft.protein import AMINO_ACIDS, ResidueFlags, scaffold_edit_flags, structure_chain_names, target_chain_name
 from pathlib import Path
+from bindcraft.preset_paths import CAMPAIGN_PRESETS
 
 FASTA_SUFFIXES = '.fasta', '.fa', '.faa'
 DEFAULT_IDR_CROP_LENGTHS = 10, 40
@@ -38,7 +39,7 @@ FINAL_CONFIDENCE_FILTERS = {'min_monomer_plddt_final': 'Unbound_Binder_pLDDT', '
 TARGET_SETTING_NAMES = frozenset({'name', 'target_path', 'chains', 'hotspots', 'coldspots', 'weight', 'objective'})
 METRIC_ENTRY_NAMES = frozenset({'params', 'prediction_state'})
 FILTER_ENTRY_NAMES = METRIC_ENTRY_NAMES | {'threshold', 'higher', 'mandatory'}
-CORE_DEFAULTS = json.loads((Path(__file__).parent.parent / 'settings' / 'core' / 'default.json').read_text())
+CORE_DEFAULTS = json.loads((CAMPAIGN_PRESETS / 'core' / 'default.json').read_text())
 DEFAULT_LOSSES = CORE_DEFAULTS['losses']
 DEFAULT_FILTERS = CORE_DEFAULTS['filters']
 DEFAULT_SETTINGS = CORE_DEFAULTS
@@ -350,7 +351,6 @@ def configure_campaign_features(settings: dict, request: ConfigurationRequest) -
         install_modality_check(settings, check)
     add_design_property_records(settings)
 
-CAMPAIGN_PRESETS = Path(__file__).parent.parent / 'settings'
 PRESET_TIERS = 'modality', 'property', 'target'
 BINDER_FORMATS = 'binder', 'large_binder', 'peptide', 'cyclic_peptide', 'homo_oligomer', 'multidomain', 'VHH', 'scFv', 'Fab', 'ARP'
 
