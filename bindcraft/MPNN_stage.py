@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from jax import Array
 from typing import NamedTuple
 from bindcraft.prediction import ProteinPredictor
-from bindcraft.filters import binder_assembly_sequence, binder_chain_sequences, binder_target_contact_masks, confidence_stage_filters, design_sequence_report, design_stage_filters, evaluate_design_filters, protomer_identity_fraction, validates_unbound_binder, INTERFACE_PDAE_METRICS
+from bindcraft.filters import binder_assembly_sequence, binder_chain_sequences, binder_target_contact_masks, paired_cysteine_mask, confidence_stage_filters, design_sequence_report, design_stage_filters, evaluate_design_filters, protomer_identity_fraction, validates_unbound_binder, INTERFACE_PDAE_METRICS
 from bindcraft.loss import align_binder_coordinates, binder_copy_chains, chain_atom_coordinates, chain_residue_slices, multidomain_linker_residues
 from bindcraft.protein import StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, has_resolved_atom, superposed_on_binder, write_structure, BINDER_ALONE
 from bindcraft.campaign_log import candidate_outcome, redesigns_kept, exhausted_redesign_window
@@ -43,19 +43,37 @@ def induced_fit_mobile_residues(binder: Protein, binder_alone: Protein, rmsd_thr
         mobile_residues = mobile_residues.at[released].set(False)
     return mobile_residues
 
-def mark_redesign_residues(protein_complex: dict[str, Protein], binder: str, target: str, keep_interface: bool, cutoff: float=4.0, mobile_binder_residues: Array | None=None, hold_framework: bool=False, multi_chain_binder: tuple[str, ...]=(), linker_binder_residues: Array | None=None) -> dict[str, Protein]:
+def imposed_residues(settings: dict, protein_complex: dict[str, Protein], binder: str, chain: str, target: str, binder_alone: Protein | None=None, design_pae: Array | None=None, trajectory_seed: int=0, cutoff: float=4.0, report: bool=False) -> Array:
+    """The residues of one binder chain imposed on the ProteinMPNN output, read off the settings."""
+    held = jnp.zeros(len(protein_complex[chain]), dtype=bool)
+    induced_fit = None
+
+    if binder_alone is not None: #induced fit case: hold what moves between the two states
+        induced_fit = induced_fit_mobile_residues(protein_complex[chain], binder_alone, float(settings.get('induced_fit_mpnn_threshold', 2.0)), int(settings.get('induced_fit_mpnn_shell', 1)), float(settings.get('induced_fit_mpnn_designed_share', INDUCED_FIT_DESIGNED_SHARE)))
+        held = held | induced_fit
+
+    if not settings.get('redesign_interface', DEFAULT_SETTINGS['redesign_interface']) or induced_fit is not None:
+        held = held | binder_target_contact_masks(protein_complex[chain], protein_complex[target], cutoff)[0]
+
+    if settings.get('binder_scaffold'): #fold conditioning case: hold the scaffold framework
+        held = held | has_residue_flag(protein_complex[chain].flags, ResidueFlags.TEMPLATE)
+
+    if design_pae is not None and settings.get('weights_multidomain') and settings.get('mpnn_fix_linker', True):
+        span = chain_residue_slices(protein_complex)[chain] #multi-domain case: hold the inter-domain linker
+        held = held | multidomain_linker_residues(settings, protein_complex[chain], design_pae[span, span], trajectory_seed)
+
+    if settings.get('weights_disulfide'): #disulfide staple case: hold the pair Binder_Disulfides counts
+        held = held | jnp.asarray(paired_cysteine_mask(protein_complex, binder, chain, float(settings.get('disulfide_distance', 3.8)), sequence_separation=int(settings.get('disulfide_sequence_separation', 3))))
+
+    if report:
+        print(f'ProteinMPNN: holding {int(held.sum())} of {len(protein_complex[chain])} residue(s) of chain {chain}', flush=True)
+    return held
+
+def mark_redesign_residues(protein_complex: dict[str, Protein], binder: str, target: str, settings: dict, cutoff: float=4.0, multi_chain_binder: tuple[str, ...]=(), report: bool=False, **trajectory) -> dict[str, Protein]:
     redesign_complex = dict(protein_complex)
     redesign_complex[target] = protein_complex[target].replace(flags=(protein_complex[target].flags & _NOT_DESIGN).astype(jnp.uint8))
-    held_residue_masks = {}
-    for name in binder_copy_chains(protein_complex, binder):
-        held_residues = jnp.zeros(len(protein_complex[name]), dtype=bool) if mobile_binder_residues is None else mobile_binder_residues
-        if keep_interface or mobile_binder_residues is not None:
-            held_residues = held_residues | binder_target_contact_masks(protein_complex[name], protein_complex[target], cutoff)[0]
-        if hold_framework:
-            held_residues = held_residues | has_residue_flag(protein_complex[name].flags, ResidueFlags.TEMPLATE) #mask out fold conditioning scaffold
-        if linker_binder_residues is not None:
-            held_residues = held_residues | linker_binder_residues #mask out the inter-domain linker, multi-domain case
-        held_residue_masks[name] = held_residues
+    held_residue_masks = {name: imposed_residues(settings, protein_complex, binder, name, target, cutoff=cutoff, report=report, **trajectory)
+                          for name in binder_copy_chains(protein_complex, binder)}
     if multi_chain_binder:
         tied_residues = jnp.stack([held_residue_masks[name] for name in multi_chain_binder]).any(0)
         held_residue_masks.update({name: tied_residues for name in multi_chain_binder})
@@ -72,10 +90,10 @@ def share_binder_chain_sequences(protein_complex: dict[str, Protein], binder: st
 def redesign_target_chain(protein_complex: dict[str, Protein], binder: str) -> str:
     return next(name for name in sorted(protein_complex) if name not in binder_copy_chains(protein_complex, binder))
 
-def prepare_multitarget_redesign(target_states: ProteinStates, binder: str, keep_interface: bool, cutoff: float=4.0, multi_chain_binder: tuple[str, ...]=(), mobile_binder_residues: Array | None=None, hold_framework: bool=False, linker_binder_residues: Array | None=None) -> ProteinStates:
+def prepare_multitarget_redesign(target_states: ProteinStates, binder: str, settings: dict, cutoff: float=4.0, multi_chain_binder: tuple[str, ...]=(), report: bool=False, **trajectory) -> ProteinStates:
     if any((not has_resolved_atom(protein_complex[binder].atom_mask, 'CA').any() for protein_complex in target_states.values())):
         raise ValueError(f'Multitarget redesign needs the predicted complex of every positive target; the {binder!r} chain it was given has no backbone')
-    redesign_states = {name: mark_redesign_residues(protein_complex, binder, redesign_target_chain(protein_complex, binder), keep_interface, cutoff, mobile_binder_residues, hold_framework, multi_chain_binder, linker_binder_residues) for name, protein_complex in target_states.items()}
+    redesign_states = {name: mark_redesign_residues(protein_complex, binder, redesign_target_chain(protein_complex, binder), settings, cutoff, multi_chain_binder, report, **trajectory) for name, protein_complex in target_states.items()}
     union_of_interfaces = jnp.zeros(len(next(iter(redesign_states.values()))[binder]), dtype=bool)
     for protein_complex in redesign_states.values():
         union_of_interfaces |= jnp.logical_not(has_residue_flag(protein_complex[binder].flags, ResidueFlags.DESIGN))
@@ -144,12 +162,6 @@ def decode_sequence_candidates(mpnn_model: ProteinPredictor, redesign_rotation: 
     decoded = {state: iter(mpnn_model.predict_candidates({state: redesign_rotation[state]}, candidate_count=states_for_candidates.count(state))) for state in rotation_states}
     return [(state, next(decoded[state])[state].protein_complex) for state in states_for_candidates]
 
-def redesign_linker_residues(settings: dict, protein_complex: dict[str, Protein], binder: str, design_pae: Array | None, trajectory_seed: int) -> Array | None:
-    if design_pae is None or not settings.get('weights_multidomain') or not settings.get('mpnn_fix_linker', True):
-        return None
-    binder_slice = chain_residue_slices(protein_complex)[binder]
-    return multidomain_linker_residues(settings, protein_complex[binder], design_pae[binder_slice, binder_slice], trajectory_seed)
-
 class RedesignContext(NamedTuple):
     decode_states: ProteinStates
     joint_decode_states: ProteinStates
@@ -159,22 +171,15 @@ class RedesignContext(NamedTuple):
 
 def prepare_binder_redesign(protein_complex: dict[str, Protein], design_settings: BinderDesignSettings, binder: str, target: str, prediction_state: str, target_states: ProteinStates | None=None, predicted_states: ProteinStates | None=None, multi_chain_binder: tuple[str, ...]=(), binder_alone_complex: dict[str, Protein] | None=None, design_pae: Array | None=None, trajectory_seed: int=0) -> RedesignContext:
     settings = design_settings.settings
-    keep_interface = not settings.get('redesign_interface', DEFAULT_SETTINGS['redesign_interface'])
     #fold switching case
     if any((BINDER_ALONE in group for group in design_settings.binder_shapes)):
         binder_alone_complex = None
-    mobile_residues = induced_fit_mobile_residues(protein_complex[binder], binder_alone_complex[binder], float(settings.get('induced_fit_mpnn_threshold', 2.0)), int(settings.get('induced_fit_mpnn_shell', 1)), float(settings.get('induced_fit_mpnn_designed_share', INDUCED_FIT_DESIGNED_SHARE))) if binder_alone_complex else None #induced fit case
-    if mobile_residues is not None:
-        print(f'induced fit: holding {int(mobile_residues.sum())} of {len(protein_complex[binder])} residue(s) that move between the two states through ProteinMPNN', flush=True)
-    hold_framework = bool(settings.get('binder_scaffold')) #fold conditioning case
-    if hold_framework:
-        print(f"scaffold: holding {sum((int(has_residue_flag(protein_complex[name].flags, ResidueFlags.TEMPLATE).sum()) for name in binder_copy_chains(protein_complex, binder)))} framework residue(s) through ProteinMPNN", flush=True)
-    linker_residues = redesign_linker_residues(settings, protein_complex, binder, design_pae, trajectory_seed) #multi-domain case
-    redesign_complex = mark_redesign_residues(protein_complex, binder, target, keep_interface, mobile_binder_residues=mobile_residues, hold_framework=hold_framework, multi_chain_binder=multi_chain_binder, linker_binder_residues=linker_residues)
+    trajectory = {'binder_alone': binder_alone_complex[binder] if binder_alone_complex else None, 'design_pae': design_pae, 'trajectory_seed': trajectory_seed}
+    redesign_complex = mark_redesign_residues(protein_complex, binder, target, settings, multi_chain_binder=multi_chain_binder, report=True, **trajectory)
     #a detarget is validated against but never decoded on
     detarget_states = {state.name for state in design_settings.prepared_states if state.objective == 'detarget'}
     predicted_target_states = {name: state_complex for name, state_complex in (predicted_states or {}).items() if name not in detarget_states}
-    decode_states = prepare_multitarget_redesign(predicted_target_states, binder, keep_interface, multi_chain_binder=multi_chain_binder, mobile_binder_residues=mobile_residues, hold_framework=hold_framework, linker_binder_residues=linker_residues) if len(predicted_target_states) > 1 else {prediction_state: redesign_complex}
+    decode_states = prepare_multitarget_redesign(predicted_target_states, binder, settings, multi_chain_binder=multi_chain_binder, **trajectory) if len(predicted_target_states) > 1 else {prediction_state: redesign_complex}
     #multitargeting: tied redesign reads every target at once
     joint_decode_states = decode_states if len(decode_states) > 1 and settings.get('multitarget_tied_redesign', True) else {}
     return RedesignContext(decode_states, joint_decode_states, target_states or {prediction_state: redesign_complex}, multi_chain_binder, '+'.join(joint_decode_states))

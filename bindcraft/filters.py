@@ -683,28 +683,42 @@ def interface_amino_acid_count(protein_states: ProteinStates, predictions: Struc
     binder_sequence = np.concatenate([binder_one_letter_sequence(protein_complex[name]) for name in binder_copy_chains(protein_complex, binder)])
     return float((interface_residues & (binder_sequence == amino_acid)).sum())
 
-def paired_cysteine_count(deviation, pairable) -> int:
-    bonded, bonds = set(), 0
+def paired_cysteine_indices(deviation, pairable) -> set:
+    bonded = set()
     for first, second in sorted(zip(*np.nonzero(pairable)), key=lambda pair: deviation[pair]):
         if first not in bonded and second not in bonded:
             bonded.update((first, second))
-            bonds += 1
-    return bonds
+    return bonded
+
+def binder_assembly_cysteine_pairing(protein_complex: dict[str, Protein], binder: str, distance: float=3.8, tolerance: float=1.0, sequence_separation: int=3) -> tuple[set, tuple[str, ...]]:
+    """The cysteines the binder assembly pairs into disulfides, as positions over the chains concatenated in order."""
+    chains = binder_copy_chains(protein_complex, binder)
+    coordinates = np.concatenate([np.asarray(chain_atom_coordinates(protein_complex[name], 'CB')[0]) for name in chains])
+    cysteines = np.concatenate([binder_one_letter_sequence(protein_complex[name]) == 'C' for name in chains])
+    if cysteines.sum() < 2:
+        return set(), chains
+    residue_indices = np.arange(len(cysteines))
+    separated = np.abs(residue_indices[:, None] - residue_indices[None, :]) >= sequence_separation
+    deviation = np.abs(np.linalg.norm(coordinates[:, None, :] - coordinates[None, :, :], axis=-1) - distance)
+    pairable = np.triu(cysteines[:, None] & cysteines[None, :] & separated & (deviation <= tolerance))
+    return paired_cysteine_indices(deviation, pairable), chains
+
+def paired_cysteine_mask(protein_complex: dict[str, Protein], binder: str, chain: str, distance: float=3.8, tolerance: float=1.0, sequence_separation: int=3) -> np.ndarray:
+    """The residues of one binder chain that Binder_Disulfides counts as a paired cysteine."""
+    bonded, chains = binder_assembly_cysteine_pairing(protein_complex, binder, distance, tolerance, sequence_separation)
+    start = sum(len(protein_complex[name]) for name in chains[:chains.index(chain)])
+    mask = np.zeros(len(protein_complex[chain]), dtype=bool)
+    for position in bonded:
+        if start <= position < start + len(mask):
+            mask[position - start] = True
+    return mask
 
 @filter_metric('Binder_Disulfides')
 def binder_disulfide_count_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', distance: float=3.8, tolerance: float=1.0, sequence_separation: int=3) -> float:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     protein_complex = predictions[prediction_state].protein_complex
-    chains = binder_copy_chains(protein_complex, binder)
-    coordinates = np.concatenate([np.asarray(chain_atom_coordinates(protein_complex[name], 'CB')[0]) for name in chains])
-    cysteines = np.concatenate([binder_one_letter_sequence(protein_complex[name]) == 'C' for name in chains])
-    if cysteines.sum() < 2:
-        return 0.0
-    residue_indices = np.arange(len(cysteines))
-    separated = np.abs(residue_indices[:, None] - residue_indices[None, :]) >= sequence_separation
-    deviation = np.abs(np.linalg.norm(coordinates[:, None, :] - coordinates[None, :, :], axis=-1) - distance)
-    pairable = np.triu(cysteines[:, None] & cysteines[None, :] & separated & (deviation <= tolerance))
-    return float(paired_cysteine_count(deviation, pairable))
+    bonded, _chains = binder_assembly_cysteine_pairing(protein_complex, binder, distance, tolerance, sequence_separation)
+    return float(len(bonded) // 2)
 
 RESIDUE_MASS = {'A': 71.08, 'R': 156.19, 'N': 114.10, 'D': 115.09, 'C': 103.14, 'Q': 128.13, 'E': 129.12, 'G': 57.05, 'H': 137.14, 'I': 113.16, 'L': 113.16, 'K': 128.17, 'M': 131.19, 'F': 147.18, 'P': 97.12, 'S': 87.08, 'T': 101.10, 'W': 186.21, 'Y': 163.18, 'V': 99.13}
 WATER_MASS = 18.02
