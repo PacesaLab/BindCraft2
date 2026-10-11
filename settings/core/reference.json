@@ -238,6 +238,7 @@
     "relax_steps": null,
     "relax_weight_bond": null,
     "relax_weight_clash": null,
+    "reproducible_gradients": false,
     "resume": true,
     "save_binder_monomers": true,
     "save_design_animations": false,
