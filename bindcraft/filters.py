@@ -115,13 +115,13 @@ def interface_residues_metric(protein_states: ProteinStates, predictions: Struct
     protein_complex = predictions[prediction_state].protein_complex
     return float(binder_assembly_contact_masks(protein_complex, binder, resolve_target_chain(protein_complex, target, prediction_state), cutoff)[0].sum())
 
-def tm_score_distance_scale(partner_count: jnp.ndarray) -> jnp.ndarray:
-    return jnp.maximum(1.24 * (jnp.maximum(partner_count, 19.0) - 15.0) ** (1 / 3) - 1.8, 1.0)
+INTERFACE_TM_DISTANCE_SCALE = 4.0
+def interface_tm_scores(pae: jnp.ndarray, distance_scale: float=INTERFACE_TM_DISTANCE_SCALE) -> jnp.ndarray:
+    return 1.0 / (1.0 + (pae / distance_scale) ** 2)
 
 def anchored_interface_tm_scores(pae: jnp.ndarray, contact: jnp.ndarray) -> jnp.ndarray:
     partner_counts = contact.sum(-1).astype(jnp.float32)
-    tm_scores = 1.0 / (1.0 + (pae / tm_score_distance_scale(partner_counts)[:, None]) ** 2)
-    return jnp.where(contact, tm_scores, 0.0).sum(-1) / jnp.maximum(partner_counts, 1.0)
+    return jnp.where(contact, interface_tm_scores(pae), 0.0).sum(-1) / jnp.maximum(partner_counts, 1.0)
 
 def interface_pae_directions(predictions: StructurePredictions, prediction_state: str, binder: str, target: str, cutoff: float) -> tuple[tuple[jnp.ndarray, jnp.ndarray], ...] | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
@@ -164,10 +164,12 @@ def residue_confidence_tracks(predictions: StructurePredictions, prediction_stat
 @filter_metric('i_pDAE')
 def interface_pdae_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', target: str='target', cutoff: float=8.0) -> float | None:
     directions = interface_pae_directions(predictions, prediction_state, binder, target, cutoff)
-    return None if directions is None else float(max(anchored_interface_tm_scores(pae, contact).max() for pae, contact in directions))
+    if directions is None:
+        return None
+    pae, contact = directions[0]
+    return float(jnp.where(contact, interface_tm_scores(pae), 0.0).sum() / jnp.maximum(contact.sum(), 1))
 
 INTERFACE_PDAE_METRICS = {'i_pDAE': interface_pdae_metric}
-
 AF2_CONFIDENCE_METRICS = frozenset({'pLDDT', 'pTM', 'i_pTM', 'Unbound_Binder_pLDDT', 'Target_pLDDT'})
 
 def confidence_stage_filters(stage_filters: dict[str, DesignFilter]) -> dict[str, DesignFilter]:
@@ -235,11 +237,6 @@ def residue_solvent_accessible_area(protein_complex: dict[str, Protein], chains:
     try:
         per_atom_area = struc.sasa(atom_array, probe_radius=1.4, point_number=SASA_PROBE_POINTS)
     except KeyError:
-        # ProtOr radii are keyed by (residue, atom) and raise on any pair the table does not carry, so
-        # a single atom a residue should not have -- a redesigned serine holding a CG, say -- takes the
-        # whole design worker down mid-campaign. Element radii cover every atom, and differ from ProtOr
-        # by around a percent on well-formed residues, so the metric degrades slightly here rather than
-        # the campaign ending on one malformed side chain.
         per_atom_area = struc.sasa(atom_array, probe_radius=1.4, point_number=SASA_PROBE_POINTS,
                                    vdw_radii='Single')
     per_residue_area = struc.apply_residue_wise(atom_array, np.nan_to_num(per_atom_area), np.sum)
