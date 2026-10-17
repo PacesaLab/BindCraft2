@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from bindcraft.campaign_output import CONFIDENCE_METRIC, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, SCORED_FILENAME, STAGE_TABLE_NAMES, TRAJECTORY_STAGE, structure_paths, TARGET_NAME_COLUMN, TARGET_WEIGHT_COLUMN, numeric_value, on_target_mean, per_target_readings, read_metric_rows, recorded_target_values, stage_folder, stage_table, write_csv_rows
+from bindcraft.campaign_output import CONFIDENCE_METRIC, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_PREFIX, RANK_STAGE, REFOLD_STAGE, SCORED_FILENAME, STAGE_TABLE_NAMES, TRAJECTORY_STAGE, structure_paths, TARGET_NAME_COLUMN, TARGET_WEIGHT_COLUMN, numeric_value, on_target_mean, per_target_readings, read_metric_rows, recorded_target_values, stage_folder, stage_table, write_csv_rows
 
 DESIGN_TABLES = {'accepted': RANK_STAGE, 'candidates': REFOLD_STAGE, 'trajectories': TRAJECTORY_STAGE}
 METADATA_FILENAMES = ('campaign_metadata.json',)
@@ -189,7 +189,8 @@ def derive_sequence_metrics(rows: list[dict]) -> dict[str, bool]:
 def design_structure(project_folder: str, design: str, target: str='') -> str:
     for folder in STRUCTURE_FOLDERS:
         for pattern in (f'{design}.cif', f'{design}.pdb', *((f'{design}_{target}.cif', f'{design}_{target}_*.cif', f'{design}_{target}.pdb') if target else ())):
-            kept = sorted(glob.glob(os.path.join(project_folder, folder, pattern)))
+            #the ranked folder carries the design's current rank as a prefix, rewritten on every acceptance
+            kept = sorted(glob.glob(os.path.join(project_folder, folder, pattern)) or glob.glob(os.path.join(project_folder, folder, f'{RANK_PREFIX}*_{pattern}')))
             if kept:
                 return kept[0]
     return ''

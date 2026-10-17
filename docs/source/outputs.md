@@ -26,10 +26,10 @@ Paths below are inside `project_folder`. A stage folder appears when its first r
 | `2_Refolded/BinderMonomer/<design>_candidate<n>_monomer.cif` | The binder repredicted alone, superposed on its bound pose; written when the free binder is predicted (e.g. the `Binder_RMSD` filter is active) and `save_binder_monomers` is set. |
 | `2_Refolded/filtered.csv` | Passing shortlist from `bindcraft filter` with its default candidate table. |
 | `3_Ranked/!_Ranked.csv` | Every accepted sequence, best-first by `i_pDAE`, rewritten after each acceptance; the single record of what was accepted. Missing scores sort last. When the campaign closes it drops any row whose complex is no longer in the folder (delete a `.cif` to reject a design; its prediction survives in `2_Refolded/Complexes/`) and, on a resumed run, designs replacements to refill the target. |
-| `3_Ranked/<design>_seq<n>[_<target>].cif` | Accepted predicted complexes. Multiple target states get separate files. |
-| `3_Ranked/<design>_seq<n>_monomer.cif` | Free binder, when predicted and `save_binder_monomers` is enabled; may contain several binder chains. |
-| `3_Ranked/<design>_seq<n>.html` | Copy of the originating trajectory viewer when animations are enabled. |
-| `3_Ranked/relaxed/` | Additional restrained, clash-minimised complexes when relaxation is enabled. Original predictions remain alongside them in `3_Ranked/`. |
+| `3_Ranked/rank<NNN>_<design>_seq<n>[_<target>].cif` | Accepted predicted complexes, prefixed with their current rank and renamed after each acceptance. Multiple target states get separate files. |
+| `3_Ranked/rank<NNN>_<design>_seq<n>_monomer.cif` | Free binder, when predicted and `save_binder_monomers` is enabled; may contain several binder chains. |
+| `3_Ranked/rank<NNN>_<design>_seq<n>.html` | Copy of the originating trajectory viewer when animations are enabled. |
+| `3_Ranked/relaxed/` | Additional restrained, clash-minimised complexes when relaxation is enabled, prefixed the same way. Original predictions remain alongside them in `3_Ranked/`. |
 | `3_Ranked/ranked_by_<metric>.csv` | A new ranking written by `bindcraft rank`; the standard ranking is retained. |
 | `summary.csv` | Long-form counts and metric summaries across attempts, stages, candidates and accepted designs. |
 | `campaign_metadata.json` | Input provenance, complete resolved settings and derived choices. Different metadata on a resumed run gets a content-addressed filename. |
@@ -49,7 +49,7 @@ Older campaigns with flat `trajectories.csv`, `candidates.csv`, `accepted.csv`, 
 
 | Column / convention | Meaning |
 | --- | --- |
-| `design` | File identity. `_candidate<n>` counts ProteinMPNN draws; `_seq<n>` identifies retained sequences. |
+| `design` | File identity, without the `rank<NNN>_` prefix of an accepted structure. `_candidate<n>` counts ProteinMPNN draws; `_seq<n>` identifies retained sequences. |
 | `hash` | Design-recipe identity. The same hash can have several sequence candidates. It is also the join key back to `1_Trajectories/!_Trajectories.csv`, which is the only table carrying `terminated` and `autotuned`. |
 | `trajectory` | Claimed attempt number; used to derive its random seed. |
 | `terminated` | Stage at which gradient design stopped. Blank means it completed, not that ProteinMPNN accepted a sequence. |
