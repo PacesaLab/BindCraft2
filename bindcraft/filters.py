@@ -4,10 +4,11 @@ import biotite.structure as struc
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import Array
 from typing import Callable, NamedTuple, TYPE_CHECKING
 from bindcraft.epitope_targeting import EPITOPE_CUTOFF, epitope_residues
 from bindcraft.developability import mhc_panels
-from bindcraft.loss import _masked_mean, align_binder_coordinates, aligned_binder_tm_score, bind_state_metric, binder_binding_mask, binder_copy_chains, binder_framework_mask, bound_and_unbound_binder_coordinates, chain_atom_coordinates, chain_pair_pae_loss, chain_residue_slices, complex_residue_weights, core_aligned_interface_rmsd, induced_fit_interface_masks, mhc_epitope_score, pairwise_atom_distances, pooled_protease_site_score, resolve_binder_role, resolve_prediction_state, resolve_target_chain, soft_maximum, terminus_target_direction_cosine
+from bindcraft.loss import _masked_mean, align_binder_coordinates, aligned_binder_tm_score, bind_state_metric, binder_binding_mask, binder_copy_chains, binder_framework_mask, bound_and_unbound_binder_coordinates, chain_atom_coordinates, confident_binder_comparison, chain_pair_pae_loss, chain_residue_slices, complex_residue_weights, core_aligned_interface_rmsd, induced_fit_interface_masks, mhc_epitope_score, pairwise_atom_distances, pooled_protease_site_score, resolve_binder_role, resolve_prediction_state, resolve_target_chain, soft_maximum, terminus_target_direction_cosine
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, BINDER_ALONE, Protein, ProteinStates, ResidueFlags, StructurePredictions, build_atom_array, has_residue_flag, output_chain_letters, parse_scaffold_edits, real_residue_count, real_residue_mask, redesignable_residue_mask, structure_chain_names
 
 if TYPE_CHECKING:
@@ -352,18 +353,26 @@ filter_metric('Interface_Helix_Fraction')(functools.partial(interface_secondary_
 filter_metric('Interface_BetaSheet_Fraction')(functools.partial(interface_secondary_structure_fraction, secondary_structure_code='b'))
 filter_metric('Interface_Loop_Fraction')(functools.partial(interface_secondary_structure_fraction, secondary_structure_code='c'))
 
-@filter_metric('Binder_RMSD')
-@filter_metric('Induced_Fit_RMSD')
-def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
-    prediction_state = resolve_prediction_state(predictions, prediction_state)
-    if prediction_state not in predictions or reference_state not in predictions:
-        return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+def weighted_binder_rmsd(coordinates: Array, reference_coordinates: Array, valid_mask: Array) -> float | None:
     if float(valid_mask.sum()) < 3:
         return None
     aligned_coordinates = align_binder_coordinates(coordinates, reference_coordinates, valid_mask)
     squared_deviation = jnp.square(aligned_coordinates - reference_coordinates).sum(-1)
     return float(jnp.sqrt((squared_deviation * valid_mask).sum() / valid_mask.sum()))
+
+@filter_metric('Binder_RMSD')
+def binder_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    if prediction_state not in predictions or reference_state not in predictions:
+        return None
+    return weighted_binder_rmsd(*bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder))
+
+@filter_metric('Induced_Fit_RMSD')
+def induced_fit_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', confidence_floor: float=0.7) -> float | None:
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    if prediction_state not in predictions or reference_state not in predictions:
+        return None
+    return weighted_binder_rmsd(*confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor))
 
 @filter_metric('Target_RMSD')
 def target_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', target: str='target') -> float | None:
@@ -381,25 +390,26 @@ def target_rmsd_metric(protein_states: ProteinStates, predictions: StructurePred
     return float(jnp.sqrt((squared_deviation * valid_mask).sum() / valid_mask.sum()))
 
 @filter_metric('Induced_Fit_Interface_RMSD')
-def induced_fit_interface_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', target: str='target', cutoff: float=8.0, interface_residues: tuple[int, ...]=()) -> float | None:
+def induced_fit_interface_rmsd_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', target: str='target', cutoff: float=8.0, interface_residues: tuple[int, ...]=(), confidence_floor: float=0.7) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor)
     interface_mask, alignment_mask = induced_fit_interface_masks(protein_states, predictions, coordinates, valid_mask, prediction_state, target, cutoff, interface_residues)
     if float(interface_mask.sum()) < 3 or float(alignment_mask.sum()) < 3:
         return None
     return float(core_aligned_interface_rmsd(coordinates, reference_coordinates, interface_mask, alignment_mask))
 
 @filter_metric('Induced_Fit_TM')
-def induced_fit_tm_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder') -> float | None:
+def induced_fit_tm_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', reference_state: str=BINDER_ALONE, binder: str='binder', confidence_floor: float=0.7) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     if prediction_state not in predictions or reference_state not in predictions:
         return None
-    coordinates, reference_coordinates, valid_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    coordinates, reference_coordinates, valid_mask = confident_binder_comparison(predictions, prediction_state, reference_state, binder, confidence_floor)
     if float(valid_mask.sum()) < 3:
         return None
-    return float(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask))
+    _, _, structural_mask = bound_and_unbound_binder_coordinates(predictions, prediction_state, reference_state, binder)
+    return float(aligned_binder_tm_score(coordinates, reference_coordinates, valid_mask, structural_mask.sum()))
 
 def epitope_contact_masks(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str, binder: str, target: str, cutoff: float, epitope_cutoff: float):
     target = resolve_target_chain(predictions[prediction_state].protein_complex, target, prediction_state)
@@ -553,7 +563,7 @@ def domain_separation_ratio_metric(protein_states: ProteinStates, predictions: S
     return min(float(np.linalg.norm(centroids[index] - centroids[index + 1])) / (radii[index] + radii[index + 1] + 1e-08) for index in range(len(domains) - 1))
 
 @filter_metric('Binder_Chain_Breaks')
-def binder_chain_breaks_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', minimum_bond: float=3.3, maximum_bond: float=4.3) -> float | None:
+def binder_chain_breaks_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', maximum_bond: float=4.3) -> float | None:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     breaks = None
     for chain in binder_copy_chains(protein_states[prediction_state], binder):
@@ -564,7 +574,7 @@ def binder_chain_breaks_metric(protein_states: ProteinStates, predictions: Struc
         if not bonded.any():
             continue
         bond_lengths = np.linalg.norm(coordinates[1:] - coordinates[:-1], axis=-1)
-        breaks = (breaks or 0.0) + float((bonded & ((bond_lengths < minimum_bond) | (bond_lengths > maximum_bond))).sum())
+        breaks = (breaks or 0.0) + float((bonded & (bond_lengths > maximum_bond)).sum())
     return breaks
 
 def protomer_identity_fraction(protein_complex: dict[str, Protein], binder: str) -> float | None:
@@ -683,28 +693,42 @@ def interface_amino_acid_count(protein_states: ProteinStates, predictions: Struc
     binder_sequence = np.concatenate([binder_one_letter_sequence(protein_complex[name]) for name in binder_copy_chains(protein_complex, binder)])
     return float((interface_residues & (binder_sequence == amino_acid)).sum())
 
-def paired_cysteine_count(deviation, pairable) -> int:
-    bonded, bonds = set(), 0
+def paired_cysteine_indices(deviation, pairable) -> set:
+    bonded = set()
     for first, second in sorted(zip(*np.nonzero(pairable)), key=lambda pair: deviation[pair]):
         if first not in bonded and second not in bonded:
             bonded.update((first, second))
-            bonds += 1
-    return bonds
+    return bonded
+
+def binder_assembly_cysteine_pairing(protein_complex: dict[str, Protein], binder: str, distance: float=3.8, tolerance: float=1.0, sequence_separation: int=3) -> tuple[set, tuple[str, ...]]:
+    """The cysteines the binder assembly pairs into disulfides, as positions over the chains concatenated in order."""
+    chains = binder_copy_chains(protein_complex, binder)
+    coordinates = np.concatenate([np.asarray(chain_atom_coordinates(protein_complex[name], 'CB')[0]) for name in chains])
+    cysteines = np.concatenate([binder_one_letter_sequence(protein_complex[name]) == 'C' for name in chains])
+    if cysteines.sum() < 2:
+        return set(), chains
+    residue_indices = np.arange(len(cysteines))
+    separated = np.abs(residue_indices[:, None] - residue_indices[None, :]) >= sequence_separation
+    deviation = np.abs(np.linalg.norm(coordinates[:, None, :] - coordinates[None, :, :], axis=-1) - distance)
+    pairable = np.triu(cysteines[:, None] & cysteines[None, :] & separated & (deviation <= tolerance))
+    return paired_cysteine_indices(deviation, pairable), chains
+
+def paired_cysteine_mask(protein_complex: dict[str, Protein], binder: str, chain: str, distance: float=3.8, tolerance: float=1.0, sequence_separation: int=3) -> np.ndarray:
+    """The residues of one binder chain that Binder_Disulfides counts as a paired cysteine."""
+    bonded, chains = binder_assembly_cysteine_pairing(protein_complex, binder, distance, tolerance, sequence_separation)
+    start = sum(len(protein_complex[name]) for name in chains[:chains.index(chain)])
+    mask = np.zeros(len(protein_complex[chain]), dtype=bool)
+    for position in bonded:
+        if start <= position < start + len(mask):
+            mask[position - start] = True
+    return mask
 
 @filter_metric('Binder_Disulfides')
 def binder_disulfide_count_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', distance: float=3.8, tolerance: float=1.0, sequence_separation: int=3) -> float:
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     protein_complex = predictions[prediction_state].protein_complex
-    chains = binder_copy_chains(protein_complex, binder)
-    coordinates = np.concatenate([np.asarray(chain_atom_coordinates(protein_complex[name], 'CB')[0]) for name in chains])
-    cysteines = np.concatenate([binder_one_letter_sequence(protein_complex[name]) == 'C' for name in chains])
-    if cysteines.sum() < 2:
-        return 0.0
-    residue_indices = np.arange(len(cysteines))
-    separated = np.abs(residue_indices[:, None] - residue_indices[None, :]) >= sequence_separation
-    deviation = np.abs(np.linalg.norm(coordinates[:, None, :] - coordinates[None, :, :], axis=-1) - distance)
-    pairable = np.triu(cysteines[:, None] & cysteines[None, :] & separated & (deviation <= tolerance))
-    return float(paired_cysteine_count(deviation, pairable))
+    bonded, _chains = binder_assembly_cysteine_pairing(protein_complex, binder, distance, tolerance, sequence_separation)
+    return float(len(bonded) // 2)
 
 RESIDUE_MASS = {'A': 71.08, 'R': 156.19, 'N': 114.10, 'D': 115.09, 'C': 103.14, 'Q': 128.13, 'E': 129.12, 'G': 57.05, 'H': 137.14, 'I': 113.16, 'L': 113.16, 'K': 128.17, 'M': 131.19, 'F': 147.18, 'P': 97.12, 'S': 87.08, 'T': 101.10, 'W': 186.21, 'Y': 163.18, 'V': 99.13}
 WATER_MASS = 18.02

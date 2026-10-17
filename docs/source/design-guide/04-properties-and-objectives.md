@@ -25,7 +25,7 @@ rarer** — add only what your experiment needs. The overall roles:
 | `multidomain` (objective) | two separated domains joined by a linker | domain-separation / interdomain-contact / chain-break checks |
 | detargeting (negative `weight`) | the binder repelled from the off-target | off-target `i_pTM` and interface residues under their ceilings |
 
-`initial_guess` and `bigbang` are the exceptions — they change *how* optimisation is initialised, not
+`hard_target` and `large_complex` are the exceptions — they change *how* optimisation is initialised, not
 what is optimised, so they carry no filter (see [Desperation and autotuning](05-desperation-and-autotuning.md)).
 
 ## What each one actually does — and what it does *not* tell you
@@ -72,14 +72,14 @@ while requiring sheet, steering away from the all-α helical bundles de novo des
 it caps helix at ≤50% and requires ≥20% sheet. *Caveat:* β-rich de novo folds are harder to design and
 predict, so expect a lower hit rate.
 
-**`initial_guess` / `bigbang` — how AlphaFold is initialised.** Both change the *starting coordinates*
+**`hard_target` / `large_complex` — how AlphaFold is initialised.** Both change the *starting coordinates*
 AlphaFold works from, not the objective, so neither adds a filter of its own.
-- **`initial_guess`** re-predicts each redesigned candidate **starting from the pose the trajectory
+- **`hard_target`** (previously known as `initial_guess`) re-predicts each redesigned candidate **starting from the pose the trajectory
   folded** — instead of predicting the sequence from a blank slate, AlphaFold begins its recycling from
   the design's own backbone. This helps it converge to the intended fold and interface for **difficult
   motifs** (extended loops, shallow or unusual interfaces, disordered-region binders) that a
   from-scratch prediction can miss.
-- **`bigbang`** (`bigbang_initialization`) seeds the **gradient design stages** from the coordinates on
+- **`large_complex`** (`large_complex_initialization`) seeds the **gradient design stages** from the coordinates on
   hand rather than from the origin, giving AlphaFold a foothold on **large complexes (>~600 aa)** it
   struggles to build from nothing — which is where reprediction of a large motif otherwise fails.
 
@@ -89,7 +89,7 @@ own pose is a potential false positive — expect a **modest rise in false-posit
 from-scratch refold. That bias is deliberate and bounded, and importantly **both options have been
 experimentally validated** — designs accepted with them have yielded real binders — so they are sound
 tools for hard targets and difficult motifs. Use them when a target won't repredict otherwise; where
-you can, spot-check a few winners with the option off. (`initial_guess` is also a rung of the
+you can, spot-check a few winners with the option off. (`hard_target` is also a rung of the
 [desperation ladder](05-desperation-and-autotuning.md).)
 
 ## Combining modalities and properties

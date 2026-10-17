@@ -1,5 +1,5 @@
 {
-  "description": "A new miniprotein binder of 60-100 residues, folded from nothing",
+  "description": "A new miniprotein binder of 60-180 residues, folded from nothing",
   "binder_lengths": [
     60,
     180

@@ -1,17 +1,11 @@
 {
+  "modality": "scFv",
   "target": "hPDL1",
   "binder_scaffold": "../scaffolds/scFv.cif",
-  "mutate_positions": "L30-32,L91-94,L96,H31-33,H50,H52-55(4-6),H57,H59,H99-106(5-18),H72*",
   "number_of_final_designs": 5,
   "max_trajectories": 100,
-  "min_scaffold_sequence_retained_final": 1.0,
-  "max_scaffold_framework_rmsd_final": 3.0,
   "min_plddt_refine": 0.65,
-  "min_iptm_anneal": 0.5,
-  "min_iptm_harden": 0.5,
   "min_plddt_mutate": 0.65,
-  "min_iptm_mutate": 0.5,
   "min_iptm_final": 0.6,
-  "min_monomer_plddt_final": 0.7,
   "project_folder": "results/pdl1_scfv"
 }

@@ -1,15 +1,16 @@
 import os
 import threading
 import time
+from dataclasses import dataclass
 import jax
 from bindcraft.af2 import AlphaFoldDesignModel, MONOMER_POOL, MULTIMER_POOL, campaign_length_bucket, padded_prediction_length
-from bindcraft.campaign_output import trajectory_output_path, CampaignProgress, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, TRAJECTORY_STAGE, accepted_state_suffixes, append_accepted_design, append_campaign_metrics, archive_trajectory_folder, designed_span_stamp, discard_trajectory_structures, drawn_weight_stamp, model_score_stamp, rank_accepted_designs, reprediction_facts, structure_metadata, stage_folder, stage_table, target_ordered_row, timing_stamp, weighted_target_order, write_campaign_metadata, write_campaign_summary
+from bindcraft.campaign_output import trajectory_output_path, CampaignProgress, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, TRAJECTORY_STAGE, accepted_state_suffixes, append_accepted_design, append_campaign_metrics, archive_trajectory_folder, claimed_trajectory_directory, designed_span_stamp, discard_trajectory_structures, drawn_weight_stamp, model_score_stamp, rank_accepted_designs, reprediction_facts, structure_metadata, stage_folder, stage_table, target_ordered_row, timing_stamp, weighted_target_order, write_campaign_metadata, write_campaign_summary
 from bindcraft.campaign_log import binder_optimization, campaign_budget_exhausted, campaign_closed, campaign_header, campaign_label, design_worker_index, speaks_for_the_campaign, trajectory_already_designed, trajectory_design_label, trajectory_header
 from bindcraft.design_identity import design_hash, design_name
 from bindcraft.parameter_sweep import arm_trajectory_budget, autotuned_settings, autotuned_stamp, parameter_sweep_arms, parameter_sweep_options, sweep_block_budgets, write_sweep_record
 from bindcraft.MPNN_stage import redesign_and_validate_binders
 from bindcraft.filters import INTERFACE_PDAE_METRICS, all_atom_clashes_metric, backbone_clashes_metric, binder_chain_sequences, design_sequence_report, design_stage_filters, evaluate_design_filters, residue_confidence_tracks
-from bindcraft.design_workers import campaign_subbatch_size, dispatch_design_workers, running_as_design_worker
+from bindcraft.design_workers import dispatch_design_workers, running_as_design_worker
 from bindcraft.desperation import desperate_settings
 from bindcraft.loss import DISTOGRAM_DEPENDENT_LOSSES
 from bindcraft.model_weights import model_weights
@@ -70,9 +71,9 @@ def apply_desperation_settings(design_model, validation_model, settings: dict) -
         if prediction_model is not None:
             prediction_model.target_flexibility = float(settings.get('target_flexibility', DEFAULT_SETTINGS['target_flexibility']))
     if design_model is not None:
-        design_model.bigbang_initialization = design_seeds_from_given_coordinates(settings)
+        design_model.large_complex_initialization = design_seeds_from_given_coordinates(settings)
     if validation_model is not None:
-        validation_model.bigbang_initialization = validation_seeds_from_given_coordinates(settings)
+        validation_model.large_complex_initialization = validation_seeds_from_given_coordinates(settings)
 
 def desperate_prediction_pools(design_model, validation_model, settings: dict, build_validation_model) -> tuple:
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)
@@ -99,11 +100,19 @@ def trajectory_length_bucket(design_settings, key: jax.Array, trajectory_number:
     drawn, _targets = sampled_trajectory_values(design_settings, jax.random.fold_in(key, trajectory_number))
     return padded_prediction_length(drawn['binder_length'], campaign_length_bucket(design_settings.settings))
 
+def resolved_attention_route(design_settings, alphafold_model, key: jax.Array) -> str:
+    protein_states, _multi_chain_binders, losses = initialize_design_trajectory(design_settings, jax.random.split(key)[0])
+    if any(not entry.required_states <= set(protein_states) for entry in losses.values()):
+        return alphafold_model.attention_backend
+    alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True)
+    return alphafold_model.last_attention_backend
+
 def compile_next_length_bucket(design_settings, alphafold_model, key: jax.Array, trajectory_number: int) -> threading.Thread:
     def compile_gradient_graph() -> None:
         try:
             protein_states, _multi_chain_binders, losses = initialize_design_trajectory(design_settings, jax.random.split(jax.random.fold_in(key, trajectory_number))[0])
-            alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True)
+            alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True, compile_blocking=False)
+            alphafold_model.predict(protein_states, model=alphafold_model.models[0], compile_only=True, compile_blocking=False)
         except Exception as compile_failure:
             print(f'compiling the next length bucket failed, leaving it to the trajectory that folds there ({compile_failure})', flush=True)
     compile_thread = threading.Thread(target=compile_gradient_graph, daemon=True)
@@ -167,13 +176,14 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
         apply_desperation_settings(alphafold_model, validation_model, tuned_settings)
         autotuned = autotuned_stamp(settings, tuned_settings)
         drawn, trajectory_targets = sampled_trajectory_values(design_settings, trajectory_random_key)
-        identity, _hashed_values = design_hash(tuned_settings, {**drawn, 'design_models': list(alphafold_model.models)}, trajectory_targets)
+        attention_route = resolved_attention_route(design_settings, alphafold_model, trajectory_random_key)
+        identity, _hashed_values = design_hash(tuned_settings, {**drawn, 'design_models': list(alphafold_model.models), 'attention_backend': attention_route}, trajectory_targets)
         name = design_name(trajectory_design_label(settings, tuple(state.objective for state in design_settings.prepared_states)), drawn['binder_length'], identity, settings.get('hash_design_names', True), trajectory_number)
         print(trajectory_header(trajectory_number, name, accepted_design_count, requested_designs, worker_label, autotuned), flush=True)
-        if not campaign_progress.claim_recipe(identity):
+        trajectory_directory = os.path.join(trajectories_dir, name)
+        if not claimed_trajectory_directory(trajectory_directory):
             print(trajectory_already_designed(name), flush=True)
             continue
-        trajectory_directory = os.path.join(trajectories_dir, name)
         trajectory_length = padded_prediction_length(drawn['binder_length'], campaign_length_bucket(settings))
         compiled_fresh = trajectory_length not in compiled_length_buckets
         compiled_length_buckets.add(trajectory_length)
@@ -249,20 +259,20 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)
     if selected_models.validation_pool_exhausted:
         print(f'validation held out on the monomer pool {selected_models.validation_models}: the {len(selected_models.design_models)} design models leave nothing of the multimer pool for a held-out validation set', flush=True)
-    subbatch_size = campaign_subbatch_size(settings, design_residue_count(settings))
+    subbatch_size = settings.get('subbatch_size', 'auto')
     attention_backend = settings.get('attention_backend', 'auto')
     use_cueq = bool(settings.get('use_cueq', False))
+    use_remat = bool(settings.get('use_remat', True))
     length_bucket_size = campaign_length_bucket(settings)
     design_settings = build_design_settings(settings)
     if speaks_for_the_campaign():
         print_campaign_header(settings, project_folder, design_settings)
-    target_lengths = {len(protein) for protein in prepare_targets(design_settings, longest_crop=True).values()}
-    target_pad_length = padded_prediction_length(max(target_lengths), length_bucket_size) if len(target_lengths) > 1 else 0  #for multitargeting
-    multi_chain_binders = (design_settings.binder_chains,) if design_settings.binder.copies > 1 and design_settings.oligomer_tie == 'symmetric' else ()  #for oligomers
-    alphafold_model = AlphaFoldDesignModel(presets=selected_models.design_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('design_recycles', DEFAULT_SETTINGS['design_recycles']), models=selected_models.design_models, cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, length_bucket_size=length_bucket_size, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length, amino_acid_bias=design_settings.binder.amino_acid_bias)
+    design_plan = campaign_design_plan(settings)
+    multi_chain_binders, target_pad_length = design_plan.multi_chain_binders, design_plan.target_pad_length
+    alphafold_model = campaign_design_model(design_plan, selected_models.design_models, af2_weights, settings)
     refuse_predictor_without_distogram(settings, alphafold_model)
     mpnn_model = ProteinMPNNSequenceModel(data_dir=mpnn_weights, max_cache_size=16, model_name=settings.get('mpnn_model', 'v_48_020'), variant=settings.get('mpnn_variant', 'negative'), omitted_amino_acids=design_settings.binder.omitted_amino_acids, amino_acid_bias=design_settings.binder.amino_acid_bias, multi_chain_binders=multi_chain_binders, length_bucket_size=length_bucket_size, target_pad_length=target_pad_length) if mpnn_weights and (not settings.get('trajectory_only')) else None
-    build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
+    build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, use_remat=use_remat, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
     validation_model = build_validation_model(selected_models.validation_models) if mpnn_model else None
     if mpnn_model is None and max_trajectories is None:
         max_trajectories = DEFAULT_TRAJECTORY_ONLY_BUDGET
@@ -298,3 +308,37 @@ def launch_campaign(settings_path: str, setting_overrides: list[str] | tuple[str
         return worker_status
     run_campaign(settings, project_folder, af2_weights=af2_weights, mpnn_weights=mpnn_weights, metadata=metadata)
     return 0
+
+@dataclass
+class CampaignDesignPlan:
+    design_settings: object
+    subbatch_size: int | None | str
+    attention_backend: str
+    use_cueq: bool
+    use_remat: bool
+    length_bucket_size: int
+    multi_chain_binders: tuple
+    target_pad_length: int
+
+def campaign_design_plan(settings: dict) -> CampaignDesignPlan:
+    length_bucket_size = campaign_length_bucket(settings)
+    design_settings = build_design_settings(settings)
+    target_lengths = {len(protein) for protein in prepare_targets(design_settings, longest_crop=True).values()}
+    return CampaignDesignPlan(design_settings=design_settings,
+                              subbatch_size=settings.get('subbatch_size', 'auto'),
+                              attention_backend=settings.get('attention_backend', 'auto'),
+                              use_cueq=bool(settings.get('use_cueq', False)),
+                              use_remat=bool(settings.get('use_remat', True)),
+                              length_bucket_size=length_bucket_size,
+                              multi_chain_binders=(design_settings.binder_chains,) if design_settings.binder.copies > 1 and design_settings.oligomer_tie == 'symmetric' else (),
+                              target_pad_length=padded_prediction_length(max(target_lengths), length_bucket_size) if len(target_lengths) > 1 else 0)
+
+def campaign_design_model(design_plan: CampaignDesignPlan, design_models, af2_weights: str | None, settings: dict) -> AlphaFoldDesignModel:
+    return AlphaFoldDesignModel(presets=design_models, data_dir=af2_weights, max_cache_size=16,
+                                num_recycle=settings.get('design_recycles', DEFAULT_SETTINGS['design_recycles']),
+                                models=design_models, cyclic_offset_mode=resolve_cyclic_offset_mode(settings),
+                                subbatch_size=design_plan.subbatch_size, attention_backend=design_plan.attention_backend,
+                                use_cueq=design_plan.use_cueq, use_remat=design_plan.use_remat, length_bucket_size=design_plan.length_bucket_size,
+                                multi_chain_binders=design_plan.multi_chain_binders,
+                                target_pad_length=design_plan.target_pad_length,
+                                amino_acid_bias=design_plan.design_settings.binder.amino_acid_bias)

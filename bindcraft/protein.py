@@ -234,7 +234,7 @@ class Protein:
         sequence, residue_flags = self.sequence.tolist(), [int(residue_flag) for residue_flag in self.flags]
         atom_positions, atom_mask = self.atoms.tolist(), self.atom_mask.tolist()
         unresolved_atom_positions, unresolved_atom_mask = [[0.0] * 3] * len(ATOM_NAMES), [False] * len(ATOM_NAMES)
-        designed_residue_count = sum(scaffold_edit[2] for scaffold_edit in scaffold_edits)
+        designed_residue_count = sum(scaffold_edit[2] for scaffold_edit in scaffold_edits if scaffold_edit[3] & ResidueFlags.DESIGN)
         designed_sequence_logits = (0.01 * jax.random.normal(sequence_random_key, (designed_residue_count, len(AMINO_ACIDS)))).tolist()
         designed_residue_position = 0
         edited_residue_indices, edited_sequence, edited_atom_positions, edited_atom_mask, edited_residue_flags = [], [], [], [], []
@@ -247,6 +247,17 @@ class Protein:
                 edited_atom_mask.append(atom_mask[scaffold_residue_position])
                 edited_residue_flags.append(residue_flags[scaffold_residue_position])
                 scaffold_residue_position += 1
+            if not edit_flags & ResidueFlags.DESIGN:
+                if replacement_length != end - start + 1:
+                    raise ValueError(f'residue span {start}-{end} asks for a replacement length while dropping DESIGN; a held span keeps the residues the scaffold has')
+                while scaffold_residue_position < len(residue_index) and residue_index[scaffold_residue_position] <= end:
+                    edited_residue_indices.append(residue_index[scaffold_residue_position] + residue_number_shift)
+                    edited_sequence.append(sequence[scaffold_residue_position])
+                    edited_atom_positions.append(atom_positions[scaffold_residue_position])
+                    edited_atom_mask.append(atom_mask[scaffold_residue_position])
+                    edited_residue_flags.append(residue_flags[scaffold_residue_position] | int(edit_flags))
+                    scaffold_residue_position += 1
+                continue
             replacement_residue_start = start + residue_number_shift
             while scaffold_residue_position < len(residue_index) and residue_index[scaffold_residue_position] <= end:
                 scaffold_residue_position += 1
@@ -265,6 +276,7 @@ class Protein:
             edited_atom_mask.append(atom_mask[scaffold_residue_position])
             edited_residue_flags.append(residue_flags[scaffold_residue_position])
             scaffold_residue_position += 1
+        edited_residue_flags = coldspotted_framework_flags(edited_residue_flags)
         return Protein(sequence=jnp.asarray(edited_sequence, dtype=jnp.float16), atoms=jnp.asarray(edited_atom_positions, dtype=jnp.float16), atom_mask=jnp.asarray(edited_atom_mask, dtype=bool), flags=jnp.asarray(edited_residue_flags, dtype=jnp.uint8), residue_index=jnp.asarray(edited_residue_indices, dtype=jnp.int32))
 
 @dataclass
@@ -683,6 +695,19 @@ def scaffold_edit_spans(edit_string: str, chain_letter: str, default_flags: Resi
 
 def scaffold_edit_flags(edit_string: str) -> list:
     return [flags for chain_letter in dict.fromkeys(match.group('chain') for match in _EDIT_RE.finditer(edit_string)) for _, _, _, flags in scaffold_edit_spans(edit_string, chain_letter)]
+
+def coldspotted_framework_flags(residue_flags: list) -> list:
+    """COLDSPOT on every residue a declared paratope leaves out, so the flags carry the repelled set.
+
+    A scaffold that names a paratope has said where the target belongs, which says equally where it
+    does not. Deriving it here rather than at the loss keeps one answer: the flags are what the
+    campaign check prints, what the output file stamps and what binder_coldspot reads. A residue
+    that should stay reachable is cleared with -COLDSPOT in the edit string. A binder declaring no
+    paratope, which is every de novo design, declares no framework either and is left alone.
+    """
+    if not any(flag & ResidueFlags.CONTACT for flag in residue_flags):
+        return residue_flags
+    return [flag if flag & ResidueFlags.CONTACT else flag | int(ResidueFlags.COLDSPOT) for flag in residue_flags]
 
 def annotated_residue_flags(residue_index: list, edit_string: str, chain_letter: str, base_flags: ResidueFlags) -> list:
     residue_flags = [base_flags] * len(residue_index)

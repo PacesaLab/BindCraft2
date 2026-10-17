@@ -55,7 +55,7 @@ Older campaigns with flat `trajectories.csv`, `candidates.csv`, `accepted.csv`, 
 | `terminated` | Stage at which gradient design stopped. Blank means it completed, not that ProteinMPNN accepted a sequence. |
 | `outcome` | Candidate `passed` or `rejected`; passing candidates may still fall outside `kept_sequences`. |
 | `failed_filters` | Comma-separated failed checks, including a target suffix where relevant. “not measured” is different from a low score. |
-| `autotuned` | Settings that differed from the campaign's own when that attempt ran, from the autotuner and from the [desperation ladder](reference.md#the-desperation-ladder) alike. An entry naming `initial_guess`, `target_flexibility`, `validation_model` or a raised `design_recycles` means the attempt ran on a rung of that ladder, against an easier task than the campaign asked for. |
+| `autotuned` | Settings that differed from the campaign's own when that attempt ran, from the autotuner and from the [desperation ladder](reference.md#the-desperation-ladder) alike. An entry naming `hard_target`, `target_flexibility`, `validation_model` or a raised `design_recycles` means the attempt ran on a rung of that ladder, against an easier task than the campaign asked for. |
 | `rank` | Position in that particular ranking, not a probability of experimental success. |
 | `targets`, `target_weights` | Target names and weights in the order used by multi-target metric cells. |
 | `Binder_Sequence` | One-letter sequence, with `/` between binder chains. |
@@ -105,10 +105,11 @@ Most biological measurements are recorded automatically only when relevant; othe
 | `Interface_Residues_detarget` | The same count for a selected off-target. |
 | `Interface_<X>_Count` | Contacting binder residues of amino acid X. All 20 one-letter names are available: A,C,D,E,F,G,H,I,K,L,M,N,P,Q,R,S,T,V,W,Y. |
 | `Interface_BuriedArea` | Binder-side loss of solvent-accessible area upon complex formation, Å²; not the sum of both partners' buried areas. |
+| `Interface_BuriedArea_Fraction` | The same buried area as a fraction of the free binder's total accessible area; 0–1. |
 | `Surface_Hydrophobicity` | Fraction of solvent-exposed residues of the free binder that are hydrophobic (A,C,V,I,L,M,F,W,Y). Exposure uses relative SASA ≥0.2. |
 | `Backbone_Clashes` | Interchain CA atom pairs within 2.5 Å. It is not an all-backbone or all-atom clash count. |
 | `All_Atom_Clashes` | Interchain atom pairs within 2.5 Å. Intrachain clashes are not included. |
-| `Binder_Chain_Breaks` | Consecutive CA distances outside 3.3–4.3 Å within binder chains. |
+| `Binder_Chain_Breaks` | Consecutive CA distances above 4.3 Å within binder chains, which is a gap in the backbone; a cis peptide bond sits near 2.9 Å and is not counted. |
 | `Binder_Helix_Fraction`, `Binder_BetaSheet_Fraction`, `Binder_Loop_Fraction` | Fractions of binder residues assigned helix, sheet or other by secondary-structure analysis; 0–1. |
 | `Binder_Length` | Total residues over the binder assembly; includes each oligomer copy. |
 | `Binder_Mass_kDa` | Sequence-derived molecular mass of the binder assembly, kDa. Does not include unmodelled modifications. |
@@ -125,6 +126,7 @@ Most biological measurements are recorded automatically only when relevant; othe
 
 | Measurement | What it measures / how to use it |
 | --- | --- |
+| `Target_RMSD` | CA RMSD between the predicted target chain and the target as supplied, Å; a check that the target did not move, not a binder measurement. |
 | `Hotspot_Contact_Fraction` | Fraction of named target hotspots contacted by the binder, 0–1. |
 | `Coldspot_Contact_Fraction` | Fraction of named coldspots contacted, 0–1; lower is better for avoidance. |
 | `Off_Paratope_Contact_Fraction` | Fraction of contacting binder residues outside the designated paratope, 0–1. |

@@ -1,6 +1,6 @@
 {
-  "target": "hPDL1",
   "modality": "binder",
+  "target": "hPDL1",
   "campaign_name": "pdl1",
   "number_of_final_designs": 10,
   "project_folder": "results/pdl1"

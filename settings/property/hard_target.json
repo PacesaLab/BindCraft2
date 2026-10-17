@@ -1,0 +1,4 @@
+{
+  "description": "Re-predict an accepted candidate from the pose the trajectory folded (initial guess).",
+  "hard_target": true
+}

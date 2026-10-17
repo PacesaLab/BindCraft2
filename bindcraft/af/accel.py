@@ -91,7 +91,7 @@ def supported_attention_backend(requested: str='auto') -> str:
     try:
         jax.block_until_ready(jax.nn.dot_product_attention(probe_query, probe_query, probe_query, scale=1.0, implementation='cudnn'))
     except Exception:
-        return 'stock'
+        return 'chunked'
     return 'cudnn'
 
 

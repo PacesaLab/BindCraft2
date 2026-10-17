@@ -8,7 +8,7 @@ re-predicts each candidate from scratch to check it holds up, filters, and ranks
 This page explains what actually happens during a run, which knobs matter for everyday designs,
 how to pick a modality, and how to read the output so you can tell a promising design from a
 number that only looks good. It is the BC2 companion to the original
-[BindCraft wiki](https://github.com/martinpacesa/BindCraft/wiki/De-novo-binder-design-with-BindCraft); <!-- TODO: move this in to the documentation -->
+[BindCraft wiki](https://github.com/martinpacesa/BindCraft/wiki/De-novo-binder-design-with-BindCraft);
 the biology intuition carries over, but the settings, modalities and outputs below are BC2's.
 
 ```{important}
@@ -31,6 +31,15 @@ has N or runs out of budget.
 7. [What to look out for (common pitfalls)](#7-what-to-look-out-for-common-pitfalls)
 8. [A sensible first campaign](#8-a-sensible-first-campaign)
 
+```{toctree}
+:hidden:
+
+design-guide/02-setting-up-a-design
+design-guide/03-choosing-a-modality
+design-guide/04-properties-and-objectives
+design-guide/05-desperation-and-autotuning
+design-guide/06-reading-the-outputs
+```
 ---
 
 ## 1. How a campaign runs
@@ -125,7 +134,7 @@ combinations (e.g. a scaffold modality with `cyclic_peptide`) are contradictory 
 at start-up.
 
 See [Helpful properties and objectives](design-guide/04-properties-and-objectives.md) for what each
-property actually does (and doesn't tell you), the `initial_guess`/`bigbang` initialisation options,
+property actually does (and doesn't tell you), the `hard_target`/`large_complex` initialisation options,
 and the full incompatibility table.
 
 ---
@@ -135,13 +144,13 @@ and the full incompatibility table.
 BC2 adapts a stalled campaign automatically. The **autotuner** (on by default) makes small, harmless
 adjustments to stage lengths every ten trajectories. The **desperation ladder** (also on by default)
 kicks in only if a campaign accepts nothing for `desperation_trajectories` (default 750) attempts,
-then progressively trades away difficulty — `initial_guess`, relaxed `target_flexibility`, held-out
+then progressively trades away difficulty — `hard_target`, relaxed `target_flexibility`, held-out
 `multimer` validation, more recycles — one rung every further 50 trajectories until something is
 accepted. Every rung raises the expected false-positive rate, so a design's `autotuned` column tells
 you how much to discount it.
 
 See [Desperation and autotuning](design-guide/05-desperation-and-autotuning.md) for the full ladder,
-the `benchmark` reproducible profile, and when `bigbang` initialisation is worth turning on.
+the `benchmark` reproducible profile, and when `large_complex` initialisation is worth turning on.
 
 ---
 
