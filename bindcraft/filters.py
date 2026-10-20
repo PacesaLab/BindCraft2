@@ -462,8 +462,9 @@ def scaffold_framework_correspondence(protein_states: ProteinStates, prediction_
     scaffold_protein = Protein.from_structure(scaffold, chains=scaffold_chain)[scaffold_chain]
     residue_numbers = np.asarray(scaffold_protein.residue_index)
     scaffold_framework = np.ones(len(scaffold_protein), dtype=bool)
-    for start, end, _, _ in parse_scaffold_edits(scaffold_edits, scaffold_chain, jax.random.PRNGKey(0)):
-        scaffold_framework &= (residue_numbers < start) | (residue_numbers > end)
+    for start, end, _, edit_flags in parse_scaffold_edits(scaffold_edits, scaffold_chain, jax.random.PRNGKey(0)):
+        if edit_flags & ResidueFlags.DESIGN:
+            scaffold_framework &= (residue_numbers < start) | (residue_numbers > end)
     return (design_framework, scaffold_protein, scaffold_framework) if design_framework.sum() == scaffold_framework.sum() else None
 
 @filter_metric('Scaffold_Sequence_Retained_Fraction')
