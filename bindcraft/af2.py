@@ -170,7 +170,13 @@ def interface_asym_ids(chain_names: tuple[str, ...], chain_lengths: tuple[int, .
         return residue_chain_ids(chain_lengths)
     return jnp.concatenate([jnp.full((length,), assembly_names.index(assembly_name(name)), dtype=jnp.int32) for name, length in zip(chain_names, chain_lengths)])
 
+MAX_RELATIVE_OFFSET = min(af_config.CONFIG.model.embeddings_and_evoformer.max_relative_feature, af_config.CONFIG_MULTIMER.model.embeddings_and_evoformer.max_relative_idx)
+
 def cyclic_sequence_offsets(residue_index: Array, asym_id: Array, flags: Array, seq_mask: Array, offset_mode: str='direction') -> Array:
+    """Sequence separation of every residue pair, as the relative position encoding reads it.
+
+    The encoding clips at MAX_RELATIVE_OFFSET either side of zero, so writing that bound says two
+    residues are further apart than the model can tell."""
     offsets = residue_index[:, None] - residue_index[None, :]
     same_chain = asym_id[:, None] == asym_id[None, :]
     chain_lengths = (same_chain * seq_mask[None, :]).sum(-1)
@@ -180,8 +186,13 @@ def cyclic_sequence_offsets(residue_index: Array, asym_id: Array, flags: Array, 
     if offset_mode in ('direction', 'neighbours'):
         cyclic_distance = jnp.where(cyclic_distance < jnp.abs(offsets), -cyclic_distance, cyclic_distance)
     if offset_mode == 'neighbours':
-        cyclic_distance = jnp.where(jnp.abs(cyclic_distance) > 2, 32 * jnp.sign(cyclic_distance), cyclic_distance)
+        cyclic_distance = jnp.where(jnp.abs(cyclic_distance) > 2, MAX_RELATIVE_OFFSET * jnp.sign(cyclic_distance), cyclic_distance)
     return jnp.where(cyclic_pairs, cyclic_distance * jnp.sign(offsets), offsets).astype(jnp.int32)
+
+def chain_separated_offsets(offsets: Array, asym_id: Array) -> Array:
+    """Put residue offset of different chains beyond MAX_RELATIVE_OFFSET of each other.
+       Allows predicting multimers on AF2 Monomer"""
+    return jnp.where(asym_id[:, None] == asym_id[None, :], offsets, jnp.sign(asym_id[:, None] - asym_id[None, :]) * MAX_RELATIVE_OFFSET)
 
 def alphafold_input_features(sequence: Array, sequence_profile: Array, atoms: Array, atom_mask: Array, residue_index: Array, asym_id: Array, seq_mask: Array, flags: Array, dropout: Array, cyclic_offset_mode: str='direction', entity_id: Array | None=None, target_flexibility: float=0.0, large_complex_initialization: bool=False) -> dict[str, Array]:
     length = sequence.shape[0]
@@ -189,7 +200,7 @@ def alphafold_input_features(sequence: Array, sequence_profile: Array, atoms: Ar
     mask = seq_mask[:, None]
     entity_id = asym_id if entity_id is None else entity_id
     msa_feat = jnp.zeros((1, length, 49)).at[:, :, 0:20].set(sequence[None]).at[:, :, 25:45].set(sequence_profile[None])
-    return {'aatype': aatype, 'residue_index': residue_index, 'offset': cyclic_sequence_offsets(residue_index, asym_id, flags, seq_mask, cyclic_offset_mode), 'asym_id': asym_id, 'entity_id': entity_id, 'sym_id': asym_id, 'seq_mask': seq_mask, 'msa_mask': jnp.ones((1, length)) * seq_mask[None], 'target_feat': sequence, 'msa_feat': msa_feat, 'extra_msa': jnp.zeros((1, length), dtype=jnp.int32), 'extra_msa_mask': jnp.zeros((1, length), dtype=jnp.float32), 'extra_has_deletion': jnp.zeros((1, length), dtype=jnp.float32), 'extra_deletion_value': jnp.zeros((1, length)), 'all_atom_positions': atoms.astype(jnp.float32), 'all_atom_mask': atom_mask.astype(jnp.float32), 'atom14_atom_exists': jnp.where(mask, jnp.asarray(residue_constants.restype_atom14_mask)[aatype], 0), 'atom37_atom_exists': jnp.where(mask, jnp.asarray(residue_constants.restype_atom37_mask)[aatype], 0), 'residx_atom14_to_atom37': jnp.where(mask, jnp.asarray(residue_constants.restype_atom14_to_atom37)[aatype], 0), 'residx_atom37_to_atom14': jnp.where(mask, jnp.asarray(residue_constants.restype_atom37_to_atom14)[aatype], 0), 'use_dropout': dropout, 'prev': {'prev_msa_first_row': jnp.zeros((length, 256)), 'prev_pair': jnp.zeros((length, length, 128)), 'prev_pos': jnp.zeros((length, 37, 3))}, **({'initial_atom_pos': atoms.astype(jnp.float32)} if large_complex_initialization else {}), **target_template_features(aatype, atoms, atom_mask, flags, residue_index, target_flexibility)}
+    return {'aatype': aatype, 'residue_index': residue_index, 'offset': chain_separated_offsets(cyclic_sequence_offsets(residue_index, asym_id, flags, seq_mask, cyclic_offset_mode), asym_id), 'asym_id': asym_id, 'entity_id': entity_id, 'sym_id': asym_id, 'seq_mask': seq_mask, 'msa_mask': jnp.ones((1, length)) * seq_mask[None], 'target_feat': sequence, 'msa_feat': msa_feat, 'extra_msa': jnp.zeros((1, length), dtype=jnp.int32), 'extra_msa_mask': jnp.zeros((1, length), dtype=jnp.float32), 'extra_has_deletion': jnp.zeros((1, length), dtype=jnp.float32), 'extra_deletion_value': jnp.zeros((1, length)), 'all_atom_positions': atoms.astype(jnp.float32), 'all_atom_mask': atom_mask.astype(jnp.float32), 'atom14_atom_exists': jnp.where(mask, jnp.asarray(residue_constants.restype_atom14_mask)[aatype], 0), 'atom37_atom_exists': jnp.where(mask, jnp.asarray(residue_constants.restype_atom37_mask)[aatype], 0), 'residx_atom14_to_atom37': jnp.where(mask, jnp.asarray(residue_constants.restype_atom14_to_atom37)[aatype], 0), 'residx_atom37_to_atom14': jnp.where(mask, jnp.asarray(residue_constants.restype_atom37_to_atom14)[aatype], 0), 'use_dropout': dropout, 'prev': {'prev_msa_first_row': jnp.zeros((length, 256)), 'prev_pair': jnp.zeros((length, length, 128)), 'prev_pos': jnp.zeros((length, 37, 3))}, **({'initial_atom_pos': atoms.astype(jnp.float32)} if large_complex_initialization else {}), **target_template_features(aatype, atoms, atom_mask, flags, residue_index, target_flexibility)}
 
 def recycled_alphafold_outputs(alphafold_runner: af_model.RunModel, model_parameters: Array, key: Array, model_inputs: dict, num_recycle: int) -> dict:
     recycle_keys = jax.random.split(key, num_recycle + 1)
@@ -242,18 +253,6 @@ def protein_state_shapes(protein_states: ProteinStates) -> tuple[tuple[str, tupl
         chain_lengths = tuple(len(protein_states[state_name][chain_name]) for chain_name in chain_names)
         complex_shapes.append((state_name, chain_names, chain_lengths))
     return tuple(complex_shapes)
-
-MONOMER_CHAIN_GAP = 49
-
-def monomer_chain_break_indices(chain_lengths: tuple[int, ...], residue_index: Array) -> Array:
-    """Renumber a complex for the monomer models, holding the chains apart without closing the breaks inside them.
-
-    merge_receptor_chains fuses a multi-chain target into one chain and keeps its receptor chains apart by a
-    gap in the residue numbering; numbering the chain straight through would hand the models a peptide bond
-    that is not there, and they fold the receptor chains into one another."""
-    steps = jnp.concatenate([jnp.zeros((1,), dtype=jnp.int32), jnp.diff(residue_index)])
-    chain_starts = jnp.cumsum(jnp.asarray(chain_lengths[:-1], dtype=jnp.int32))
-    return jnp.cumsum(steps.at[chain_starts].set(MONOMER_CHAIN_GAP + 1))
 
 def alphafold_model_family(model_name: str) -> tuple:
     if 'multimer' in model_name:
@@ -406,8 +405,6 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         asym_id = residue_chain_ids(chain_lengths)
         entity_id = residue_entity_ids(chain_names, chain_lengths, self.multi_chain_binders)
         interface_asym_id = interface_asym_ids(chain_names, chain_lengths)
-        if self.model_families[model][0] == 'monomer' and len(chain_names) > 1:
-            residue_index = monomer_chain_break_indices(chain_lengths, residue_index)
         seq_mask = real_residue_weights(flags)
         if padding_length:
             sequence = jnp.pad(sequence, [[0, padding_length], [0, 0]])
