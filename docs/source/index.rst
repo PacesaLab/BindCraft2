@@ -49,6 +49,7 @@ Explore the documentation below to learn how BindCraft2 works, choose the right 
 
    design-guide
    installation
+   apple-silicon
    reference
    outputs
    examples

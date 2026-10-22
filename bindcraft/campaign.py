@@ -6,15 +6,17 @@ import jax
 from bindcraft.af2 import AlphaFoldDesignModel, MONOMER_POOL, MULTIMER_POOL, campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import trajectory_output_path, CampaignProgress, DEFAULT_PROJECT_FOLDER, RANKING_METRIC, RANK_STAGE, REFOLD_STAGE, TRAJECTORY_STAGE, accepted_state_suffixes, append_accepted_design, append_campaign_metrics, archive_trajectory_folder, claimed_trajectory_directory, designed_span_stamp, discard_trajectory_structures, drawn_weight_stamp, model_score_stamp, rank_accepted_designs, reprediction_facts, structure_metadata, stage_folder, stage_table, target_ordered_row, timing_stamp, weighted_target_order, write_campaign_metadata, write_campaign_summary
 from bindcraft.campaign_log import binder_optimization, campaign_budget_exhausted, campaign_closed, campaign_header, campaign_label, design_worker_index, speaks_for_the_campaign, trajectory_already_designed, trajectory_design_label, trajectory_header
+from bindcraft.campaign_log import desperation_warning
 from bindcraft.design_identity import design_hash, design_name
 from bindcraft.parameter_sweep import arm_trajectory_budget, autotuned_settings, autotuned_stamp, parameter_sweep_arms, parameter_sweep_options, sweep_block_budgets, write_sweep_record
 from bindcraft.MPNN_stage import redesign_and_validate_binders
 from bindcraft.filters import INTERFACE_PDAE_METRICS, all_atom_clashes_metric, backbone_clashes_metric, binder_chain_sequences, design_sequence_report, design_stage_filters, evaluate_design_filters, residue_confidence_tracks
-from bindcraft.design_workers import dispatch_design_workers, running_as_design_worker
-from bindcraft.desperation import desperate_settings
+from bindcraft.design_workers import _metal_campaign_active, dispatch_design_workers, running_as_design_worker
+from bindcraft.desperation import DESPERATION_LADDER, desperate_settings
+from bindcraft._worker_lifecycle import RECYCLE_EXIT_CODE, WorkerRecycleRequested, _profile_signature, apply_execution_profile, worker_context as _worker_context
 from bindcraft.loss import DISTOGRAM_DEPENDENT_LOSSES
 from bindcraft.model_weights import model_weights
-from bindcraft.preflight import cleaned_campaign_settings, preflight_campaign
+from bindcraft.preflight import _metal_campaign_settings, cleaned_campaign_settings, preflight_campaign
 from bindcraft.protein import BINDER_ALONE, StructurePrediction, relax_protein_complex, superposed_on_binder, write_structure
 from bindcraft.proteinmpnn import ProteinMPNNSequenceModel
 from bindcraft.settings import DEFAULT_SETTINGS, PRESET_TIERS, build_design_settings, design_seeds_from_given_coordinates, parse_setting_overrides, read_campaign_metadata, read_settings, requested_core_profiles, requested_preset_names, resolve_cyclic_offset_mode, resolve_validation_model, select_design_and_validation_models, target_state_names, validation_seeds_from_given_coordinates
@@ -107,7 +109,9 @@ def resolved_attention_route(design_settings, alphafold_model, key: jax.Array) -
     alphafold_model.sequence_gradients(protein_states, losses, model=alphafold_model.models[0], compile_only=True)
     return alphafold_model.last_attention_backend
 
-def compile_next_length_bucket(design_settings, alphafold_model, key: jax.Array, trajectory_number: int) -> threading.Thread:
+def compile_next_length_bucket(design_settings, alphafold_model, key: jax.Array, trajectory_number: int) -> threading.Thread | None:
+    if _metal_campaign_active():
+        return None
     def compile_gradient_graph() -> None:
         try:
             protein_states, _multi_chain_binders, losses = initialize_design_trajectory(design_settings, jax.random.split(jax.random.fold_in(key, trajectory_number))[0])
@@ -140,7 +144,13 @@ def write_trajectory_design(design_settings, protein_states, predictions, trajec
                         metadata=structure_metadata(campaign_label(design_settings.settings), prediction.metrics, design_settings, state=state, stage='trajectory'),
                         residue_metrics=residue_confidence_tracks(predictions, state), receptor_chains=receptor_chains)
 
-def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, validation_model, mpnn_model, key: jax.Array, max_trajectories: int | None, build_validation_model, autotune: bool=True, closing: bool=True, metadata: dict[str, str] | None=None) -> int:
+def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, validation_model, mpnn_model, key: jax.Array, max_trajectories: int | None, build_validation_model, autotune: bool=True, closing: bool=True, metadata: dict[str, str] | None=None, *, worker_context=None, base_settings=None) -> int:
+    settings = _metal_campaign_settings(settings)
+    context = (_worker_context(project_folder) if worker_context is None else worker_context) if _metal_campaign_active() else None
+    base_settings = settings if context is None or base_settings is None else base_settings
+    if context is not None:
+        settings = apply_execution_profile(base_settings, context['profile'])
+        validation_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL).validation_models
     requested_designs = int(settings.get('number_of_final_designs', 1))
     design_settings = build_design_settings(settings)
     target_chain_prefix = design_settings.target_chain_prefix
@@ -159,12 +169,18 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
     if mpnn_model is None and speaks_for_the_campaign():
         print(f'trajectory-only: no ProteinMPNN redesign, no design will be accepted; stopping at max_trajectories={max_trajectories}', flush=True)
     while True:
-        claimed = campaign_progress.claim_trajectory()
+        claimed = (campaign_progress.claim_trajectory(worker_context=context, base_settings=base_settings)
+                   if context is not None else campaign_progress.claim_trajectory())
         if claimed is None:
             break
         trajectory_number, accepted_design_count = claimed
-        tuned_settings = autotuned_settings(campaign_progress, settings, project_folder) if autotune else settings
-        tuned_settings, desperation = desperate_settings(tuned_settings, project_folder)
+        tuned_settings = autotuned_settings(campaign_progress, base_settings, project_folder) if autotune else base_settings
+        if context is not None:
+            # The claim admitted this entire attempt, including redesign and
+            # held-out validation. A peer may request draining while it runs.
+            tuned_settings, desperation = apply_execution_profile(tuned_settings, context['profile']), ''
+        else:
+            tuned_settings, desperation = desperate_settings(tuned_settings, project_folder)
         if desperation:
             print(desperation, flush=True)
         design_settings = build_design_settings(tuned_settings) if tuned_settings != design_settings.settings else design_settings
@@ -172,9 +188,13 @@ def run_campaign_arm(settings: dict, project_folder: str, alphafold_model, valid
         for prediction_model in (alphafold_model, validation_model, mpnn_model):
             if prediction_model is not None:
                 prediction_model.key = trajectory_random_key
-        validation_model, validation_models = desperate_prediction_pools(alphafold_model, validation_model, tuned_settings, build_validation_model)
+        if context is None:
+            validation_model, validation_models = desperate_prediction_pools(alphafold_model, validation_model, tuned_settings, build_validation_model)
+        # Beta-sheet refinement can change the recycle count within an attempt.
+        # Restore the admitted profile before the next attempt, including when
+        # the worker keeps the same model objects throughout this generation.
         apply_desperation_settings(alphafold_model, validation_model, tuned_settings)
-        autotuned = autotuned_stamp(settings, tuned_settings)
+        autotuned = autotuned_stamp(base_settings, tuned_settings)
         drawn, trajectory_targets = sampled_trajectory_values(design_settings, trajectory_random_key)
         attention_route = resolved_attention_route(design_settings, alphafold_model, trajectory_random_key)
         identity, _hashed_values = design_hash(tuned_settings, {**drawn, 'design_models': list(alphafold_model.models), 'attention_backend': attention_route}, trajectory_targets)
@@ -252,9 +272,43 @@ def print_campaign_header(settings: dict, project_folder: str, design_settings) 
     for line in campaign_header(campaign, settings, chain_residues, {name: loss.weight for name, loss in losses.items()}, tuple(design_settings.prepared_states)):
         print(line, flush=True)
 
+def _dispatch_campaign(settings: dict, project_folder: str, af2_weights, mpnn_weights, key, max_trajectories, metadata, *, coordinator_ready=None) -> int | None:
+    if not _metal_campaign_active() or running_as_design_worker():
+        return None
+    from bindcraft._apple_campaign import _dispatch_campaign as dispatch
+    return dispatch(settings, project_folder, af2_weights, mpnn_weights, key, max_trajectories, metadata,
+                    coordinator_ready=coordinator_ready)
+
+
 def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=None, mpnn_weights: str | None=None, key: jax.Array | None=None, max_trajectories: int | None=None, metadata: dict[str, str] | None=None) -> int:
+    metal = _metal_campaign_active()
+    context = _worker_context(project_folder) if metal else None
+    settings = _metal_campaign_settings(settings, report=True)
     if max_trajectories is None:
         max_trajectories = settings.get('max_trajectories')
+    # Match the historical no-redesign attempt ceiling before planning, rather
+    # than resetting a campaign budget independently in each child.
+    if metal and max_trajectories is None and (not mpnn_weights or settings.get('trajectory_only')):
+        max_trajectories = DEFAULT_TRAJECTORY_ONLY_BUDGET
+    if metal and context is None:
+        status = _dispatch_campaign(settings, project_folder, af2_weights, mpnn_weights, key, max_trajectories, metadata)
+        if status is not None:
+            if status:
+                raise RuntimeError(f'Campaign worker pool failed with exit status {status}')
+            arms = parameter_sweep_arms(settings)
+            folders = [os.path.join(project_folder, arm) for arm, _ in arms] if arms else [project_folder]
+            return sum(CampaignProgress(folder, 0).campaign_status()[1] for folder in folders)
+    base_settings = settings
+    if context is not None:
+        if parameter_sweep_arms(settings):
+            raise ValueError('Managed execution profiles currently require a single-project campaign; parameter sweeps need per-arm admission')
+        settings = apply_execution_profile(base_settings, context['profile'])
+        if _profile_signature(settings) != context['profile']['signature']:
+            raise ValueError('Worker execution profile does not match the campaign settings')
+        profile = context['profile']
+        if profile['rung']:
+            print(desperation_warning(profile['rung'], len(DESPERATION_LADDER), profile.get('fruitless_trajectories', 0),
+                                     ', '.join(f'{name} {value}' for name, value in profile['overrides'].items())), flush=True)
     key = jax.random.PRNGKey(settings.get('campaign_seed') or 0) if key is None else key
     selected_models = select_design_and_validation_models(settings, MULTIMER_POOL, MONOMER_POOL)
     if selected_models.validation_pool_exhausted:
@@ -272,13 +326,13 @@ def run_campaign(settings: dict, project_folder: str, af2_weights: str | None=No
     alphafold_model = campaign_design_model(design_plan, selected_models.design_models, af2_weights, settings)
     refuse_predictor_without_distogram(settings, alphafold_model)
     mpnn_model = ProteinMPNNSequenceModel(data_dir=mpnn_weights, max_cache_size=16, model_name=settings.get('mpnn_model', 'v_48_020'), variant=settings.get('mpnn_variant', 'negative'), omitted_amino_acids=design_settings.binder.omitted_amino_acids, amino_acid_bias=design_settings.binder.amino_acid_bias, multi_chain_binders=multi_chain_binders, length_bucket_size=length_bucket_size, target_pad_length=target_pad_length) if mpnn_weights and (not settings.get('trajectory_only')) else None
-    build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, use_remat=use_remat, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length)
+    build_validation_model = lambda validation_models: AlphaFoldDesignModel(presets=validation_models, data_dir=af2_weights, max_cache_size=16, num_recycle=settings.get('validation_recycles', 3), cyclic_offset_mode=resolve_cyclic_offset_mode(settings), subbatch_size=subbatch_size, attention_backend=attention_backend, use_cueq=use_cueq, use_remat=use_remat, length_bucket_size=length_bucket_size, dropout=False, multi_chain_binders=multi_chain_binders, target_pad_length=target_pad_length, **({'target_flexibility': float(settings.get('target_flexibility', DEFAULT_SETTINGS['target_flexibility'])), 'large_complex_initialization': validation_seeds_from_given_coordinates(settings)} if metal else {}))
     validation_model = build_validation_model(selected_models.validation_models) if mpnn_model else None
     if mpnn_model is None and max_trajectories is None:
         max_trajectories = DEFAULT_TRAJECTORY_ONLY_BUDGET
     arms = parameter_sweep_arms(settings)
     if not arms:
-        return run_campaign_arm(settings, project_folder, alphafold_model, validation_model, mpnn_model, key, max_trajectories, build_validation_model, autotune=settings.get('autotune', True), metadata=metadata)
+        return run_campaign_arm(settings, project_folder, alphafold_model, validation_model, mpnn_model, key, max_trajectories, build_validation_model, autotune=settings.get('autotune', True), metadata=metadata, **({'worker_context': context, 'base_settings': base_settings} if context is not None else {}))
     arm_trajectories = arm_trajectory_budget(max_trajectories, len(arms))
     reached = {}
     for budget in sweep_block_budgets(arm_trajectories, int(parameter_sweep_options(settings)['block_trajectories'])):
@@ -294,19 +348,41 @@ def launch_campaign(settings_path: str, setting_overrides: list[str] | tuple[str
     settings = cleaned_campaign_settings(read_settings(settings_path, parse_setting_overrides(setting_overrides)))
     metadata = {**settings_provenance(settings, tuple(setting_overrides)), **(read_campaign_metadata(metadata_path) or {})}
     project_folder = settings.get('project_folder', DEFAULT_PROJECT_FOLDER)
+    metal = _metal_campaign_active()
+    try:
+        context = _worker_context(project_folder) if metal else None
+    except WorkerRecycleRequested:
+        return RECYCLE_EXIT_CODE
     if af2_weights is None or mpnn_weights is None:
         resolved_af2_weights, resolved_mpnn_weights = model_weights()
         af2_weights = resolved_af2_weights if af2_weights is None else af2_weights
         mpnn_weights = resolved_mpnn_weights if mpnn_weights is None else mpnn_weights
-    loaded_checkpoints = preflight_campaign(settings, project_folder, af2_weights, mpnn_weights)
-    if not running_as_design_worker():
-        write_campaign_metadata(project_folder, settings, settings_path, loaded_checkpoints, metadata)
-    worker_status = dispatch_design_workers(settings, os.path.join(project_folder, 'workers'), design_residue_count(settings), worker_arguments=('--metadata', str(metadata_path)) if metadata_path else (), trajectory_budget=campaign_trajectory_budget(settings))
+    preflight_settings = apply_execution_profile(settings, context['profile']) if context is not None else settings
+    try:
+        loaded_checkpoints = preflight_campaign(preflight_settings, project_folder, af2_weights, mpnn_weights)
+    except WorkerRecycleRequested:
+        if not metal:
+            raise
+        return RECYCLE_EXIT_CODE
+    if context is None:
+        settings = preflight_settings
+    if metal:
+        worker_status = _dispatch_campaign(settings, project_folder, af2_weights, mpnn_weights, None, None, metadata,
+                                           coordinator_ready=lambda: write_campaign_metadata(project_folder, settings, settings_path, loaded_checkpoints, metadata))
+    else:
+        if not running_as_design_worker():
+            write_campaign_metadata(project_folder, settings, settings_path, loaded_checkpoints, metadata)
+        worker_status = dispatch_design_workers(settings, os.path.join(project_folder, 'workers'), design_residue_count(settings), worker_arguments=('--metadata', str(metadata_path)) if metadata_path else (), trajectory_budget=campaign_trajectory_budget(settings))
     if worker_status is not None:
         if parameter_sweep_arms(settings):
             print(f'sweep record: {write_sweep_record(project_folder, build_design_settings(settings), parameter_sweep_arms(settings))}', flush=True)
         return worker_status
-    run_campaign(settings, project_folder, af2_weights=af2_weights, mpnn_weights=mpnn_weights, metadata=metadata)
+    try:
+        run_campaign(settings, project_folder, af2_weights=af2_weights, mpnn_weights=mpnn_weights, metadata=metadata)
+    except WorkerRecycleRequested:
+        if not metal:
+            raise
+        return RECYCLE_EXIT_CODE
     return 0
 
 @dataclass
@@ -321,6 +397,7 @@ class CampaignDesignPlan:
     target_pad_length: int
 
 def campaign_design_plan(settings: dict) -> CampaignDesignPlan:
+    settings = _metal_campaign_settings(settings)
     length_bucket_size = campaign_length_bucket(settings)
     design_settings = build_design_settings(settings)
     target_lengths = {len(protein) for protein in prepare_targets(design_settings, longest_crop=True).values()}
@@ -341,4 +418,6 @@ def campaign_design_model(design_plan: CampaignDesignPlan, design_models, af2_we
                                 use_cueq=design_plan.use_cueq, use_remat=design_plan.use_remat, length_bucket_size=design_plan.length_bucket_size,
                                 multi_chain_binders=design_plan.multi_chain_binders,
                                 target_pad_length=design_plan.target_pad_length,
+                                **({'target_flexibility': float(settings.get('target_flexibility', DEFAULT_SETTINGS['target_flexibility'])),
+                                    'large_complex_initialization': design_seeds_from_given_coordinates(settings)} if _metal_campaign_active() else {}),
                                 amino_acid_bias=design_plan.design_settings.binder.amino_acid_bias)

@@ -488,6 +488,8 @@ A sweep needs `max_trajectories`, divides its budget between arms, and disables 
 
 Worker packing is limited by GPU memory, host memory and the campaign's attempt budget; sweep fan-out uses the budget of one arm. A trajectory-only run uses one worker per GPU. Lengths can be divided among workers, so faster length groups can appear more often in results. See [execution and environment overrides](installation.md#gpu-and-memory-controls) for scheduling, caches and GPU visibility.
 
+For Metal, the same worker-count controls apply to one device with a unified-memory budget. Even `auto_multi_gpu=false` uses one supervised worker, which can restart when desperation settings change. See the [Apple Silicon guide](apple-silicon.md#workers-and-reuse) for cache reuse, memory controls and supported configurations.
+
 ## Installation
 
 Use the [installation and running guide](installation.md) for local environments, Slurm, containers, offline nodes and troubleshooting.

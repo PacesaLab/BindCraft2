@@ -23,6 +23,8 @@ source .venv/bin/activate
 
 In a new terminal, return to `BindCraft2` and run `source .venv/bin/activate` again. See the [installation and running guide](docs/source/installation.md) for existing environments, older GPUs, clusters, containers and troubleshooting.
 
+Apple Silicon support is experimental. On macOS 14 or newer with native ARM64 Python 3.12+, install with `bash install.sh metal`. Each Metal worker reuses its own JAX compilation cache; the current Metal runtime cannot share compiled work between workers or preserve it across restarts. When desperation settings change, workers finish their active designs and restart, releasing memory held by the old settings. The campaign then resumes with a worker count that fits its memory budget. Desperation thresholds and scientific filters are unchanged. See the [Apple Silicon guide](docs/source/apple-silicon.md) for supported configurations and limitations.
+
 ## Run your first design
 
 From the repository root, with the environment active:

@@ -4,7 +4,9 @@ First design (see "Run your first design" in your BindCraft2 repo's top-level RE
 
 [Install](#install) · [Check it](#check-the-installation) · [Weights and caches](#model-weights-and-caches) · [Run a campaign](#run-a-campaign) · [GPU and memory](#gpu-and-memory-controls) · [Clusters](#slurm-and-other-schedulers) · [Containers](#containers) · [No internet](#machines-with-no-route-to-the-internet) · [Troubleshooting](#troubleshooting)
 
-BindCraft2 needs Linux, Python 3.12 or newer and a GPU. One command installs it on a workstation, a login node or inside a container, and chooses the accelerator wheels for the card it finds. **There is no CPU installation**: a single trajectory folds an AlphaFold ensemble hundreds of times, which is days of processor for an hour of card, so `bash install.sh cpu` is refused rather than quietly built.
+On Linux, BindCraft2 needs Python 3.12 or newer and a GPU. One command installs it on a workstation, a login node or inside a container, and chooses the accelerator wheels for the card it finds. **There is no CPU installation**: a single trajectory folds an AlphaFold ensemble hundreds of times, which is days of processor for an hour of card, so `bash install.sh cpu` is refused rather than quietly built.
+
+Experimental Apple Silicon support uses Metal on native ARM64 macOS 14 or newer. See the [Apple Silicon guide](apple-silicon.md) for installation, supported configurations and limitations. The Linux instructions below retain their usual behavior.
 
 ## Install
 
@@ -20,6 +22,7 @@ source .venv/bin/activate
 | Your machine | What to run |
 | --- | --- |
 | GPU workstation | `bash install.sh` |
+| Apple Silicon Mac | `bash install.sh metal` |
 | Cluster login node with no visible GPU | `bash install.sh`, which assumes CUDA 13 for the card your job will get |
 | Compute nodes with V100 or older cards | `bash install.sh cuda12` from the login node |
 | AMD | `bash install.sh rocm` |
@@ -35,7 +38,10 @@ source .venv/bin/activate
 | `cuda13` | CUDA 13 wheels; needs compute capability 7.5 or newer. |
 | `cuda12` | CUDA 12 wheels; the choice for Volta, Pascal and Maxwell cards. |
 | `rocm` | AMD accelerators, against a local ROCm 7 installation. |
+| `metal` | Native Apple Silicon on macOS 14 or newer; pinned JAX/metaljax runtime. |
 | `--no-weights` | Skip the one-time AlphaFold download; run `bindcraft fetch-weights` later. |
+
+On native Apple Silicon, automatic selection chooses Metal. The following driver selection applies to Linux.
 
 Automatic selection reads the CUDA version `nvidia-smi` reports, then the oldest visible card's compute capability. A driver serving CUDA 13 or 14 selects `cuda13`, a driver serving 12 selects `cuda12`, and a card below compute capability 7.5 moves the choice back to `cuda12` however new the driver is. **A machine with no driver selects `cuda13` and says so**, which is the ordinary case on a login node where the card belongs to the job rather than to the machine doing the installing. It never falls back to CPU wheels. A driver older than CUDA 12 reads the same way and prints the same line, because only 12, 13 and 14 are matched, so name `cuda12` yourself on such a machine.
 
@@ -62,7 +68,7 @@ The installer builds `.venv` with the first of these that works, and reports whi
 
 ## Check the installation
 
-The installer ends with three checks, and prints what each found.
+For Metal, follow [Check the installation](apple-silicon.md#check-the-installation). On Linux, the installer ends with three checks, and prints what each found.
 
 1. **Every module and checkpoint is named.** `python -m bindcraft.selfcheck <accelerator>` reports any missing dependency or checkpoint. A `pip`, `conda` or `uv` install can resolve a wheel and unpack nothing while reporting success, and a campaign is otherwise where that surfaces.
 2. **The command answers.** `bindcraft --help`.
@@ -91,6 +97,8 @@ python -m bindcraft.selfcheck cuda13 --shipped-only   # ask only about the check
 A campaign designs against five multimer models and holds two monomer models back to validate on, so a design is never scored by a model that shaped it. `bindcraft fetch-weights` puts both sets on the machine now and prints where they are; run it on a node whose network reaches the internet. A transfer that stopped leaves a file that exists and holds nothing, so presence alone is not enough: checkpoints under 1 MB (ProteinMPNN) or 100 MB (AlphaFold) are reported as unfinished rather than accepted.
 
 ### Compiled-graph caches
+
+The following cache instructions describe NVIDIA installations. Metal workers reuse compilations privately within each process; the current supported Metal runtime has no shared or persistent executable cache. See [Apple workers and reuse](apple-silicon.md#workers-and-reuse).
 
 A prediction shape costs about 60 s to compile and 1.5 s to read back, so a campaign keeps its compiled graphs between runs under `~/.cache/bindcraft/compile_cache/<card>`, filed by GPU type because an executable is not portable across cards. It prints `compiled graphs cached in <path>` when it does.
 
@@ -146,6 +154,8 @@ Exit status 0 is a finished campaign, 2 a refusal printed as `campaign refused:`
 
 
 ## GPU and memory controls
+
+The packing rules and size tables below describe Linux GPUs. Apple Silicon uses a unified-memory budget and can restart workers when desperation settings change; see [Apple worker controls](apple-silicon.md#workers-and-reuse) and [memory headroom](apple-silicon.md#memory-headroom).
 
 A campaign uses **every GPU it can see, without being asked**, and packs several design workers onto each card. Nothing needs configuring for this; the settings to override this behaviour are indicated below.
 

@@ -2,6 +2,7 @@ import functools
 
 import jax
 import jax.numpy as jnp
+from bindcraft import _apple
 
 LOGIT_CLIP = 1e8
 
@@ -76,6 +77,8 @@ def attend(q, k, v, bias, nonbatched_bias=None, backend='stock', chunk_size=256)
         return _attend_chunked(q, k, v, bias, nonbatched_bias, chunk_size)
     if backend not in ('cudnn', 'xla'):
         raise ValueError(f'unknown attention backend {backend!r}')
+    if _apple.metal_requested() and _apple.is_metal_backend():
+        supported_attention_backend(backend)
     unsupported_dtype = backend == 'cudnn' and q.dtype not in FUSED_DTYPES
     too_short = min(q.shape[1], k.shape[1]) < MIN_FUSED_LENGTH
     if unsupported_dtype or too_short:
@@ -84,6 +87,12 @@ def attend(q, k, v, bias, nonbatched_bias=None, backend='stock', chunk_size=256)
 
 
 def supported_attention_backend(requested: str='auto') -> str:
+    if _apple.metal_requested() and _apple.is_metal_backend():
+        if requested == 'auto':
+            return 'chunked'
+        if requested not in ('stock', 'chunked'):
+            raise ValueError(f'attention backend {requested!r} is unsupported on Metal; use chunked or stock attention')
+        return requested
     if requested != 'auto':
         return requested
     probe_shape = (1, MIN_FUSED_LENGTH, 1, 8)
@@ -96,6 +105,8 @@ def supported_attention_backend(requested: str='auto') -> str:
 
 
 def cuequivariance_available() -> bool:
+    if _apple.metal_requested() and _apple.is_metal_backend():
+        return False
     try:
         import cuequivariance_jax  # noqa: F401
     except Exception:
@@ -104,6 +115,8 @@ def cuequivariance_available() -> bool:
 
 
 def fused_triangle_multiplicative_update(activations, mask, parameters, outgoing: bool):
+    if _apple.metal_requested() and _apple.is_metal_backend():
+        raise ValueError('cuEquivariance is unsupported on Metal; set use_cueq=False')
     import cuequivariance_jax as cuequivariance
 
     original_dtype = activations.dtype
