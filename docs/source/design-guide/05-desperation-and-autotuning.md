@@ -25,6 +25,8 @@ Harmless; leave it on.
 
 The ladder is dropped the moment a design is accepted.
 
+On Metal, changes to desperation settings can drain and restart workers to release memory retained by old compilations. Active designs finish with their original settings, then the campaign rechecks progress before restarting. The ladder, thresholds and filters are unchanged; see [Apple workers and reuse](../apple-silicon.md#workers-and-reuse).
+
 ```{important}
 **Every rung of the ladder raises the expected false-positive rate.** A design accepted on a
 higher rung was accepted against an *easier* design task and judged by a *looser* validation, so it

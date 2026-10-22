@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install BC2 and everything it designs with: bash install.sh, then bindcraft design settings.json.
-# The accelerator is read off the driver; pass cuda13, cuda12, rocm or oneapi to name it instead,
-# and --no-weights to skip the one-time AlphaFold parameter download.
+# Native Apple Silicon uses Metal; elsewhere the accelerator is read off the driver.
+# Pass metal, cuda13, cuda12, rocm or oneapi to name it, --no-weights to skip the AlphaFold
+# parameter download, and --no-backend-check to defer only the Metal probe.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -10,14 +11,38 @@ UV_VERSION=0.12.13
 
 accelerator=""
 fetch_weights=1
+check_backend=1
 for argument in "$@"; do
   case "$argument" in
     --no-weights) fetch_weights=0 ;;
-    cuda13|cuda12|rocm) accelerator="$argument" ;;
+    --no-backend-check) check_backend=0 ;;
+    metal|cuda13|cuda12|rocm) accelerator="$argument" ;;
     cpu) echo "bindcraft: there is no CPU installation. A trajectory folds an AlphaFold ensemble hundreds of times, which is days of processor for an hour of card, so install where there is a GPU." >&2; exit 2 ;;
-    *) echo "usage: bash install.sh [cuda13|cuda12|rocm|oneapi] [--no-weights]" >&2; exit 2 ;;
+    *) echo "usage: bash install.sh [metal|cuda13|cuda12|rocm|oneapi] [--no-weights] [--no-backend-check (metal only)]" >&2; exit 2 ;;
   esac
 done
+
+if [[ -z $accelerator || $accelerator == metal ]]; then
+  # Only automatic/Metal selection needs the host; explicit non-Metal routes
+  # retain the original driver and interpreter probes.
+  host_os=$(uname -s 2>/dev/null || true)
+  host_arch=""
+  if [[ $host_os == Darwin || $accelerator == metal ]]; then
+    host_arch=$(uname -m 2>/dev/null || true)
+  fi
+  if [[ -z $accelerator && $host_os == Darwin && $host_arch == arm64 ]]; then
+    accelerator=metal
+  fi
+  if [[ $accelerator == metal && ( $host_os != Darwin || $host_arch != arm64 ) ]]; then
+    echo "bindcraft: Metal requires native arm64 macOS 14 or newer; use an Apple Silicon terminal and arm64 Python (not Rosetta)" >&2
+    exit 2
+  fi
+fi
+
+if [[ $check_backend == 0 && $accelerator != metal ]]; then
+  echo "usage: bash install.sh [metal|cuda13|cuda12|rocm|oneapi] [--no-weights] [--no-backend-check (metal only)]" >&2
+  exit 2
+fi
 
 if [[ -z $accelerator ]]; then
   # nvidia-smi reports the newest CUDA its driver serves, which is what the jax wheels are built for.
@@ -116,6 +141,13 @@ fi
   echo "bindcraft: $("$python" -c 'import sys; print(sys.version.split()[0])') is active and BC2 needs $PYTHON_MINIMUM or newer; deactivate it and run this again to build an environment here" >&2
   exit 1
 }
+if [[ $accelerator == metal ]]; then
+  "$python" -c 'import platform, sys
+if sys.implementation.name != "cpython" or platform.system() != "Darwin" or platform.machine() != "arm64":
+    sys.exit("bindcraft: Metal requires native arm64 CPython 3.12 or newer on macOS; deactivate any Rosetta/x86_64 environment")
+if tuple(int(part) for part in (platform.mac_ver()[0] or "0").split(".")[:2]) < (14,):
+    sys.exit("bindcraft: metaljax 0.11.9 requires macOS 14 or newer")'
+fi
 
 echo "bindcraft: installing for $accelerator"
 "$python" -m pip install --quiet --upgrade pip
@@ -127,13 +159,20 @@ if [[ $fetch_weights == 1 ]]; then "$bindcraft" fetch-weights; fi
 
 # pip, conda and uv all report success for an environment that is missing a module, and a campaign
 # is where that otherwise surfaces, so every module and every checkpoint is named here instead.
-if ! "$python" -m bindcraft.selfcheck "$accelerator"; then
+selfcheck_arguments=("$accelerator")
+if [[ $accelerator == metal && $fetch_weights == 0 ]]; then selfcheck_arguments+=(--shipped-only); fi
+if [[ $accelerator == metal && $check_backend == 1 ]]; then selfcheck_arguments+=(--check-backend); fi
+if ! "$python" -m bindcraft.selfcheck "${selfcheck_arguments[@]}"; then
   echo "bindcraft: the installation is incomplete, see above" >&2
   exit 1
 fi
 # Whether it also runs here is a different question: a login node with tight process limits cannot
 # start a JAX runtime while its compute nodes are fine, so this reports rather than refuses.
-if backend=$("$python" -c 'import jax; print(jax.default_backend(), len(jax.devices()))' 2>/dev/null); then
+if [[ $check_backend == 0 ]]; then
+  echo "bindcraft: backend execution not checked (--no-backend-check); verify before starting a campaign"
+elif [[ $accelerator == metal ]]; then
+  echo "bindcraft: Metal execution verified"
+elif backend=$("$python" -c 'import jax; print(jax.default_backend(), len(jax.devices()))' 2>/dev/null); then
   echo "bindcraft: jax runs here on ${backend% *}, ${backend#* } device(s)"
   if [[ $accelerator == cuda* && ${backend% *} == cpu && -n $(nvidia-smi -L 2>/dev/null) ]]; then
     echo "bindcraft: this machine has a GPU and jax did not take it, so a campaign here would run on the CPU" >&2
@@ -143,6 +182,12 @@ else
   echo "  python -c 'import jax; print(jax.devices())'"
 fi
 echo
-echo "bindcraft: installed, designing on $accelerator."
+if [[ $accelerator == metal ]]; then
+  echo "bindcraft: installed for $accelerator."
+else
+  echo "bindcraft: installed, designing on $accelerator."
+fi
 [[ -n "${VIRTUAL_ENV:-}${CONDA_PREFIX:-}" ]] || echo "  source .venv/bin/activate            # once per terminal"
+if [[ $check_backend == 0 && $accelerator == metal ]]; then echo "  python -m bindcraft.selfcheck metal --shipped-only --check-backend"; fi
+if [[ $accelerator == metal && $fetch_weights == 0 ]]; then echo "  bindcraft fetch-weights              # or set BINDCRAFT_AF2_PARAMS to existing parameters"; fi
 echo "  bindcraft design examples/pdl1_denovo.json"

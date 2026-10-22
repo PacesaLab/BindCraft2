@@ -1,8 +1,9 @@
 import os
 import jax
+from bindcraft._apple import memory_policy_summary, verify_metal_backend
 from bindcraft.af2 import MONOMER_POOL, MULTIMER_POOL
 from bindcraft.campaign_output import DESIGN_STAGES
-from bindcraft.design_workers import running_as_design_worker
+from bindcraft.design_workers import _metal_campaign_active, _metal_worker_problems, running_as_design_worker
 from bindcraft.loss import build_losses, induced_fit_hinge_names
 from bindcraft.protein import ResidueFlags, listed_offending_residues, partly_trimmed_residues, scaffold_edit_flags
 from bindcraft.protein_preparation import prepare_binder_chains, prepare_targets
@@ -13,6 +14,36 @@ CAMPAIGN_OUTPUT_NAMES = (*DESIGN_STAGES, '.campaign_state.json', 'trajectories.c
 
 class CampaignPreflightError(ValueError):
     pass
+
+def _metal_campaign_settings(settings: dict, report: bool=False) -> dict:
+    if not _metal_campaign_active():
+        return settings
+    problems = _metal_worker_problems(settings)
+    attention = settings.get('attention_backend', 'auto')
+    if attention not in ('auto', 'chunked', 'stock'):
+        problems.append(f'Metal does not support attention_backend={attention!r}; use auto or chunked')
+    if settings.get('use_cueq'):
+        problems.append('Metal does not support use_cueq=true; disable cuEquivariance')
+    weight = settings.get('weights_collective_softness')
+    # Resolved settings carry weights separately. Also catch the shorthand if
+    # a direct Python caller supplies it before load_settings has resolved it.
+    configured = (settings.get('losses') or {}).get('collective_softness')
+    if configured is not None and not isinstance(configured, dict):
+        weight = configured
+    weights = weight if isinstance(weight, (list, tuple)) else (weight,)
+    if any(float(value or 0) != 0 for value in weights):
+        problems.append('Metal does not support the active collective_softness loss in this MVP (QR/inverse are unavailable); remove its weight or use a supported backend. The scientific objective has not been dropped')
+    if problems:
+        raise CampaignPreflightError('\n'.join(problems))
+    verify_metal_backend()
+    resolved = {**settings, 'attention_backend': 'chunked' if attention == 'auto' else attention, 'use_cueq': False, 'compile_next_length': False}
+    if report:
+        worker = f"persistent worker {os.environ['BINDCRAFT_WORKER_ID']} of {os.environ.get('BINDCRAFT_WORKER_COUNT', '1')}" if running_as_design_worker() else 'one persistent worker in the current process'
+        print(f'campaign Metal runtime: {worker} | background next-length compilation disabled | model and compiled-shape reuse in process; persistent executable caching is unavailable', flush=True)
+        memory_policy = memory_policy_summary()
+        if memory_policy:
+            print(f'campaign Metal memory: {memory_policy}', flush=True)
+    return resolved
 
 def campaign_redesigns_sequences(settings: dict, mpnn_weights: str | None) -> bool:
     return bool(mpnn_weights) and (not settings.get('trajectory_only'))
@@ -184,7 +215,13 @@ def output_folder_problems(settings: dict, project_folder: str) -> list[str]:
     return problems
 
 def preflight_campaign(settings: dict, project_folder: str, af2_weights: str | None=None, mpnn_weights: str | None=None) -> tuple[str, ...]:
+    if _metal_campaign_active() and 'BINDCRAFT_WORKER_CONTEXT' in os.environ:
+        # Validate registration and campaign identity before backend verification
+        # or input preparation can allocate any device arrays.
+        from bindcraft._worker_lifecycle import worker_context
+        worker_context(project_folder)
     settings.update(cleaned_campaign_settings(settings))
+    settings.update(_metal_campaign_settings(settings))
     crossover = prediction_model_problems(settings)
     if crossover:
         raise CampaignPreflightError('\n'.join(crossover))

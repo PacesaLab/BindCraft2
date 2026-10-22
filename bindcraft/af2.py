@@ -1,4 +1,5 @@
 import copy
+import functools
 import platform
 import threading
 import time
@@ -9,11 +10,12 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 from jax import Array
+from bindcraft import _apple
 from bindcraft.af.alphafold.common import confidence, residue_constants
 from bindcraft.af.alphafold.model import config as af_config, data as af_data, model as af_model, modules as af_modules
 from bindcraft.af import accel
 from bindcraft.prediction import DifferentiableProteinPredictor, CompiledModelCache, residue_chain_ids, concatenate_chain_arrays, collect_shared_chains, split_residue_arrays_by_chain
-from bindcraft.loss import DesignLoss, chain_residue_slices, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
+from bindcraft.loss import DesignLoss, chain_residue_slices, collective_softness_loss, frozen_interface_arguments, renamed_loss_name, renamed_state_losses
 from bindcraft.sequence_optimization import sequence_features_from_logits
 from bindcraft.protein import AMINO_ACIDS, ATOM_INDEX, ATOM_NAMES, BINDER_ALONE, BINDER_CHAIN_PREFIX, StructurePrediction, StructurePredictions, Protein, ResidueFlags, ProteinStates, has_residue_flag, is_binder_chain, is_target_chain, kabsch, real_residue_weights
 
@@ -39,7 +41,9 @@ def compile_lock_owner_is_gone(lock_path: str) -> bool:
 @contextmanager
 def one_worker_compiles(compile_shape: tuple, blocking: bool=True):
     cache_directory = os.environ.get('JAX_COMPILATION_CACHE_DIR')
-    if not cache_directory:
+    # Metal executables cannot be serialized by the pinned runtime. A disk lock
+    # cannot share compilation between its persistent campaign workers.
+    if not cache_directory or (_apple.metal_requested() and _apple.is_metal_backend()):
         yield True
         return
     os.makedirs(cache_directory, exist_ok=True)
@@ -264,25 +268,54 @@ ATTENTION_FALLBACK_BACKEND = 'chunked'
 GRADIENT_MEMORY_SHARE = 0.80
 BYTES_PER_GIB = 1 << 30
 
-def worker_memory_budget_bytes() -> float:
+def worker_memory_budget_bytes() -> float | None:
+    if _apple.metal_requested() and _apple.is_metal_backend():
+        return _apple.memory_budget_bytes()
     from bindcraft.design_workers import design_gpu_memory_gb, visible_design_gpus
     fraction = float(os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION') or 0.75)
     memory = design_gpu_memory_gb()
     return fraction * min((memory[gpu][1] for gpu in visible_design_gpus() if gpu in memory), default=0.0) * BYTES_PER_GIB
 
-def executable_claimed_bytes(executable) -> float:
-    analysis = executable.memory_analysis()
+def executable_claimed_bytes(executable) -> float | None:
+    if not (_apple.metal_requested() and _apple.is_metal_backend()):
+        analysis = executable.memory_analysis()
+        return float(analysis.temp_size_in_bytes + analysis.argument_size_in_bytes + analysis.output_size_in_bytes)
+    try:
+        analysis = executable.memory_analysis()
+    except (AttributeError, NotImplementedError):
+        return None
+    if analysis is None:
+        return None
     return float(analysis.temp_size_in_bytes + analysis.argument_size_in_bytes + analysis.output_size_in_bytes)
 
-def resident_design_bytes() -> float:
+def resident_design_bytes() -> float | None:
+    if not (_apple.metal_requested() and _apple.is_metal_backend()):
+        try:
+            return float((jax.devices()[0].memory_stats() or {}).get('bytes_in_use', 0))
+        except Exception:
+            return 0.0
     try:
-        return float((jax.devices()[0].memory_stats() or {}).get('bytes_in_use', 0))
+        stats = jax.devices()[0].memory_stats()
+        return float(stats['bytes_in_use']) if stats is not None and 'bytes_in_use' in stats else None
     except Exception:
-        return 0.0
+        return None
 
-def executable_fits(executable) -> bool:
+def executable_fits(executable) -> bool | None:
+    """Return a measured fit decision, or None when the available bounds cannot decide."""
     budget = worker_memory_budget_bytes()
-    return not budget or executable_claimed_bytes(executable) + resident_design_bytes() <= GRADIENT_MEMORY_SHARE * budget
+    if not (_apple.metal_requested() and _apple.is_metal_backend()):
+        return not budget or executable_claimed_bytes(executable) + resident_design_bytes() <= GRADIENT_MEMORY_SHARE * budget
+    if not budget:
+        return None
+    claimed, resident = executable_claimed_bytes(executable), resident_design_bytes()
+    allowance = GRADIENT_MEMORY_SHARE * budget
+    # Both components are nonnegative. A known component above the allowance
+    # proves refusal even when the other component is unavailable.
+    if any(value is not None and value > allowance for value in (claimed, resident)):
+        return False
+    if claimed is None or resident is None:
+        return None
+    return claimed + resident <= allowance
 
 def is_out_of_memory(failure: BaseException) -> bool:
     text = str(failure).lower()
@@ -299,6 +332,12 @@ def resolve_subbatch_size(residue_count: int, subbatch_size: int | None | str='a
 
 class AlphaFoldDesignModel(DifferentiableProteinPredictor):
     def __init__(self, presets: str | tuple[str, ...]='model_1_ptm', data_dir: str | None=None, key: Array | None=None, max_cache_size: int=8, models: tuple[str, ...] | None=None, num_recycle: int=1, cyclic_offset_mode: str='direction', subbatch_size: int | None | str='auto', length_bucket_size: int=DEFAULT_LENGTH_BUCKET, attention_backend: str='auto', use_cueq: bool=False, use_remat: bool=True, dropout: bool=True, multi_chain_binders: tuple[tuple[str, ...], ...]=(), target_pad_length: int=0, target_flexibility: float=0.0, large_complex_initialization: bool=False, amino_acid_bias: dict[str, float] | None=None):
+        if _apple.metal_requested():
+            _apple.verify_metal_backend()
+            if use_cueq:
+                raise ValueError('cuEquivariance is unsupported on Metal; set use_cueq=False')
+            # Reject unsupported Metal kernels before creating parameters or models.
+            accel.supported_attention_backend(attention_backend)
         self.cyclic_offset_mode = cyclic_offset_mode
         self.target_pad_length = target_pad_length
         self.multi_chain_binders = multi_chain_binders
@@ -387,6 +426,8 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 return predicted_atom_positions, predicted_atom_mask, alphafold_prediction_metrics(alphafold_outputs, seq_mask, interface_asym_id)
             compiled_prediction = jax.jit(predict_complex_arrays)
             self.prediction_compile_cache.set(cache_key, compiled_prediction)
+            if _apple.metal_requested() and _apple.is_metal_backend():
+                self.compiled_shapes.intersection_update(self.prediction_compile_cache.compiled_functions)
         return compiled_prediction
 
     def predict(self, protein_states: ProteinStates, model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=1.0, temperature: float=0.01, logit_scale: float=2.0, compile_only: bool=False, compile_blocking: bool=True) -> StructurePredictions:
@@ -447,6 +488,13 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         return compiled_gradient
 
     def _widest_shard_that_fits(self, model: str, complex_shapes: tuple, reference_shapes: tuple, losses: dict[str, DesignLoss], gradient_arguments: tuple, shape_signature: tuple, attention_backend: str, residue_total: int) -> tuple[Callable, str, int | None | str]:
+        if _apple.metal_requested() and _apple.is_metal_backend():
+            # Keep ordinary shape-based subbatching and the configured governor.
+            # Metal's absent compiler/device metadata cannot size this workload,
+            # and the CUDA shard estimator does not describe unified memory.
+            compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend, self.subbatch_size)
+            compiled_gradient.lower(*gradient_arguments).compile()
+            return compiled_gradient, attention_backend, self.subbatch_size
         ladder = self.subbatch_ladder()
         for subbatch_size in ladder:
             compiled_gradient = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend, subbatch_size)
@@ -509,9 +557,23 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
                 return total_loss, prediction_arrays
             compiled_gradient = jax.jit(jax.value_and_grad(sequence_design_loss, argnums=2, has_aux=True))
             self.gradient_compile_cache.set(cache_key, compiled_gradient)
+            if _apple.metal_requested() and _apple.is_metal_backend():
+                retained_shapes = {key[:3] for key in self.gradient_compile_cache.compiled_functions}
+                for choices in (self.shape_attention_backend, self.shape_subbatch_size):
+                    for shape in tuple(choices):
+                        if shape not in retained_shapes:
+                            del choices[shape]
         return compiled_gradient
 
     def sequence_gradients(self, protein_states: ProteinStates, losses: dict[str, DesignLoss], model: str | None=None, softmax_weight: float=1.0, one_hot_weight: float=0.0, temperature: float=1.0, logit_scale: float=2.0, reference_predictions: StructurePredictions | None=None, compile_only: bool=False, compile_blocking: bool=True) -> tuple[StructurePredictions, dict[str, Array]]:
+        metal_backend = _apple.metal_requested() and _apple.is_metal_backend()
+        if metal_backend:
+            for name, entry in losses.items():
+                loss_function = entry.function
+                while isinstance(loss_function, functools.partial):
+                    loss_function = loss_function.func
+                if loss_function is collective_softness_loss or name.partition('.')[0] == 'collective_softness':
+                    raise ValueError('collective_softness is unsupported on Metal because its QR/inverse path is unavailable')
         model = self._resolve_model_name(model)
         _, original_shared_chains = collect_shared_chains(protein_states)
         state_names = canonical_state_names(protein_states)
@@ -535,7 +597,8 @@ class AlphaFoldDesignModel(DifferentiableProteinPredictor):
         shape_signature = self.model_families[model], complex_shapes, reference_shapes
         residue_total = sum(sum(chain_lengths) for _, _, chain_lengths in complex_shapes)
         attention_backend = self.shape_attention_backend.get(shape_signature, self.attention_backend)
-        subbatch_size = self.shape_subbatch_size.get(shape_signature, self.subbatch_ladder()[0])
+        initial_subbatch_size = self.subbatch_size if metal_backend else self.subbatch_ladder()[0]
+        subbatch_size = self.shape_subbatch_size.get(shape_signature, initial_subbatch_size)
         compiled_sequence_gradients = self._compiled_sequence_gradients(model, complex_shapes, reference_shapes, losses, attention_backend, subbatch_size)
         gradient_arguments = (self.model_parameters[model], self.key, sequences, state_templates, reference_templates, weights, frozen_interfaces, jnp.asarray(self.dropout), jnp.asarray(softmax_weight), jnp.asarray(one_hot_weight), jnp.asarray(temperature), jnp.asarray(logit_scale))
         if shape_signature not in self.shape_attention_backend:

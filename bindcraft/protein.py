@@ -73,10 +73,15 @@ def alignment_matrix_product(left: Array, right: Array) -> Array:
     return jnp.matmul(left, right, precision=jax.lax.Precision.HIGHEST)
 
 def kabsch(coordinates: Array, reference_coordinates: Array, alignment_weights: Array) -> tuple[Array, Array, Array]:
+    from bindcraft._apple import is_metal_backend, metal_requested
+
     alignment_weight_sum = alignment_weights.sum() + 1e-08
     coordinate_center = (coordinates * alignment_weights[:, None]).sum(0) / alignment_weight_sum
     reference_center = (reference_coordinates * alignment_weights[:, None]).sum(0) / alignment_weight_sum
     alignment_covariance = jnp.where(alignment_weights.sum() > 0, alignment_matrix_product(((coordinates - coordinate_center) * alignment_weights[:, None]).T, reference_coordinates - reference_center), jnp.eye(3, dtype=coordinates.dtype))
+    if metal_requested() and is_metal_backend():
+        from bindcraft._metal_alignment import rotation_from_covariance
+        return rotation_from_covariance(alignment_covariance), coordinate_center, reference_center
     left_vectors, _, right_vectors = jnp.linalg.svd(alignment_covariance)
     rotation_determinant = jnp.sign(jnp.linalg.det(alignment_matrix_product(right_vectors.T, left_vectors.T)))
     rotation = alignment_matrix_product(right_vectors.T * jnp.array([1.0, 1.0, rotation_determinant], dtype=coordinates.dtype), left_vectors.T)

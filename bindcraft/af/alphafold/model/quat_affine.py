@@ -85,6 +85,7 @@ def rot_to_quat(rot, unstack_inputs=False):
 
   Note that this function calls self_adjoint_eig which is extremely expensive on
   the GPU. If at all possible, this function should run on the CPU.
+  Metal instead uses a small cyclic Jacobi solve and its analytic eigenvector JVP.
 
   Args:
      rot: rotation matrix (see below for format).
@@ -94,6 +95,14 @@ def rot_to_quat(rot, unstack_inputs=False):
   Returns:
     Quaternion as (..., 4) tensor.
   """
+  from bindcraft._apple import is_metal_backend, metal_requested
+
+  if metal_requested() and is_metal_backend():
+    from bindcraft._metal_alignment import largest_eigenvector, quaternion_matrix
+    if not unstack_inputs:
+      rot = jnp.stack([jnp.stack(row, axis=-1) for row in rot], axis=-2)
+    return largest_eigenvector(quaternion_matrix(rot) / 3.)
+
   if unstack_inputs:
     rot = [jnp.moveaxis(x, -1, 0) for x in jnp.moveaxis(rot, -2, 0)]
 

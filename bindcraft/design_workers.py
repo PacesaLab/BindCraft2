@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 import tempfile
+from bindcraft import _apple
+from bindcraft._apple import metal_requested
 from bindcraft.af2 import campaign_length_bucket, padded_prediction_length
 from bindcraft.campaign_output import json_compatible
 from bindcraft.protein_preparation import design_residue_count
@@ -20,6 +22,23 @@ MAXIMUM_WORKERS_PER_GPU = 8
 AUTOMATIC_WORKERS_PER_GPU = 7
 TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
 CUDA_UUID_BYTES = 16
+
+def _metal_campaign_active() -> bool:
+    # Selection is read without backend discovery. Explicit CPU/CUDA choices
+    # override stale Apple startup state and private worker environment.
+    return metal_requested()
+
+
+def _metal_worker_problems(settings: dict) -> list[str]:
+    from bindcraft._apple_workers import _metal_worker_problems as problems
+    return problems(settings)
+
+
+def plan_metal_design_workers(settings: dict, residue_count: int | None=None, trajectory_budget: int | None=None,
+                              *, execution_profile: dict | None=None, resource_budget: dict | None=None) -> list[dict]:
+    from bindcraft._apple_workers import plan_metal_design_workers as plan
+    return plan(settings, residue_count, trajectory_budget, execution_profile=execution_profile, resource_budget=resource_budget)
+
 
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
@@ -169,7 +188,11 @@ def assign_worker_length_buckets(plan: list[dict], length_buckets: tuple[tuple[i
 def worker_residue_count(settings: dict, worker: dict, residue_count: int | None) -> int:
     return design_residue_count({**settings, 'binder_lengths': list(worker['lengths'])}) if worker.get('lengths') else residue_count or 0
 
-def plan_design_workers(settings: dict, residue_count: int | None=None, trajectory_budget: int | None=None) -> list[dict]:
+def plan_design_workers(settings: dict, residue_count: int | None=None, trajectory_budget: int | None=None,
+                        *, execution_profile: dict | None=None, resource_budget: dict | None=None) -> list[dict]:
+    if _metal_campaign_active():
+        return plan_metal_design_workers(settings, residue_count, trajectory_budget,
+                                         execution_profile=execution_profile, resource_budget=resource_budget)
     gpus = selected_design_gpus(os.environ.get('BINDCRAFT_GPU_IDS', settings.get('gpu_ids')))
     gpu_memory = design_gpu_memory_gb()
     worker_limit = int(os.environ.get('BINDCRAFT_DESIGN_WORKERS', settings.get('design_workers') or 0))
@@ -269,7 +292,11 @@ def report_campaign_close(project_folders: tuple[str, ...], requested_designs: i
             print('\n' + campaign_budget_exhausted(max_trajectories, trajectory_count, accepted_design_count, requested_designs), flush=True)
         print(campaign_closed(accepted_design_count, trajectory_count, RANKING_METRIC), flush=True)
 
-def launch_design_workers(plan: list[dict], log_directory: str, worker_command: list[str], launch_stagger_seconds: float=0.0, project_folders: tuple[str, ...]=(), requested_designs: int=0, max_trajectories: int | None=None) -> int:
+def launch_design_workers(plan: list[dict], log_directory: str, worker_command: list[str], launch_stagger_seconds: float=0.0, project_folders: tuple[str, ...]=(), requested_designs: int=0, max_trajectories: int | None=None, *, context: dict | None=None, admission=None) -> int:
+    if plan and all(worker['gpu'] == 'metal' for worker in plan):
+        from bindcraft._apple_workers import launch_design_workers as launch
+        return launch(plan, log_directory, worker_command, launch_stagger_seconds, project_folders,
+                      requested_designs, max_trajectories, context=context, admission=admission)
     os.makedirs(log_directory, exist_ok=True)
     processes, log_files, relays, console = [], [], [], TrajectoryOrderedConsole()
     workers_on_card, launch_order = {}, []
@@ -314,7 +341,11 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
         for log_file in log_files:
             log_file.close()
 
-def dispatch_design_workers(settings: dict, log_directory: str, residue_count: int | None=None, worker_command: list[str] | None=None, project_folders: tuple[str, ...]=(), worker_arguments: tuple[str, ...]=(), trajectory_budget: int | None=None) -> int | None:
+def dispatch_design_workers(settings: dict, log_directory: str, residue_count: int | None=None, worker_command: list[str] | None=None, project_folders: tuple[str, ...]=(), worker_arguments: tuple[str, ...]=(), trajectory_budget: int | None=None, *, admission=None) -> int | None:
+    if not running_as_design_worker() and _metal_campaign_active():
+        from bindcraft._apple_workers import dispatch_design_workers as dispatch
+        return dispatch(settings, log_directory, residue_count, worker_command, project_folders,
+                        worker_arguments, trajectory_budget, admission=admission)
     if running_as_design_worker() or not settings.get('auto_multi_gpu', True):
         return None
     plan = plan_design_workers(settings, residue_count, trajectory_budget)

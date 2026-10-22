@@ -172,14 +172,29 @@ class CampaignProgress:
             Path(partial_path).write_text(json.dumps(state, sort_keys=True))
             os.replace(partial_path, self.state_path)
 
-    def claim_trajectory(self) -> tuple[int, int] | None:
+    def claim_trajectory(self, *, worker_context=None, base_settings=None) -> tuple[int, int] | None:
+        if worker_context is not None or base_settings is not None:
+            from bindcraft._apple import metal_requested
+            if not metal_requested():
+                worker_context = base_settings = None
+        if (worker_context is None) != (base_settings is None):
+            raise ValueError('Managed claims require both worker_context and base_settings')
+        recycle = False
         with self.locked_progress() as state:
             if state['accepted'] >= self.requested_designs:
                 return None
             if self.max_trajectories and state['trajectories'] >= self.max_trajectories:
                 return None
-            state['trajectories'] += 1
-            return state['trajectories'], state['accepted']
+            if worker_context is not None:
+                from bindcraft._worker_lifecycle import _claim_admission
+                recycle = not _claim_admission(state, worker_context, base_settings, self.project_folder)
+            if not recycle:
+                state['trajectories'] += 1
+                return state['trajectories'], state['accepted']
+        # Raise only after locked_progress has saved the draining flag. Raising
+        # inside its context would skip the existing atomic state write.
+        from bindcraft._worker_lifecycle import WorkerRecycleRequested
+        raise WorkerRecycleRequested('Campaign execution profile changed; draining this generation')
 
     def record_accepted_design(self) -> int:
         with self.locked_progress() as state:
