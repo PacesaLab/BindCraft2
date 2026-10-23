@@ -143,7 +143,7 @@ def _load_biotite(st):
                             category=UserWarning)
     if looks_cif:
       block = _first_block(_biopdbx.CIFFile.read(io.StringIO(st)))
-      return _biopdbx.get_structure(block, model=1, extra_fields=['b_factor']), block
+      return _biopdbx.get_structure(block, model=1, extra_fields=['b_factor'], use_author_fields=True), block
     pdb = _biopdb.PDBFile.read(io.StringIO(st))
     return pdb.get_structure(model=1, extra_fields=['b_factor']), None
 
