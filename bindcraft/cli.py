@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 from bindcraft import OPERATOR_COMPILATION_CACHE, command_modules, package_modules
+from bindcraft._apple import metal_requested
 from bindcraft.model_weights import missing_model_weights, model_weights
 
 COMMANDS = ('design', 'archive', 'unarchive', 'fetch-weights')
@@ -153,6 +154,8 @@ def split_metadata_file(arguments: list[str]) -> tuple[list[str], str | None]:
     return paths, '' if named else metadata_path
 
 def design_card_name() -> str | None:
+    if metal_requested():
+        return None
     from bindcraft.design_workers import visible_design_gpus
     try:
         listing = subprocess.run(['nvidia-smi', '--query-gpu=uuid,name', '--format=csv,noheader'], capture_output=True, text=True, check=True).stdout
@@ -179,6 +182,10 @@ def operator_compile_cache_root() -> str | None:
         return None
 
 def use_campaign_compile_cache(settings_path: str, assignments: list[str]=()) -> str | None:
+    if metal_requested():
+        # The pinned Metal runtime retains compiled shapes only in process.
+        # An operator cache directory does not enable executable serialization.
+        return None
     if OPERATOR_COMPILATION_CACHE:
         return OPERATOR_COMPILATION_CACHE
     card = design_card_name()
@@ -205,9 +212,16 @@ def design(settings_path: str, assignments: list[str]=(), metadata_path: str | N
     if compile_cache and not running_as_design_worker():
         print(f'compiled graphs cached in {compile_cache}', flush=True)
     from bindcraft.preflight import CampaignPreflightError
+    from bindcraft._worker_lifecycle import RECYCLE_EXIT_CODE, WorkerRecycleRequested
     try:
         status = launch_campaign(settings_path, assignments, metadata_path=metadata_path)
-    except (CampaignPreflightError, ValueError, OSError) as refusal:
+    except WorkerRecycleRequested:
+        if not metal_requested():
+            raise
+        raise SystemExit(RECYCLE_EXIT_CODE)
+    except (CampaignPreflightError, ValueError, OSError, RuntimeError) as refusal:
+        if isinstance(refusal, RuntimeError) and not metal_requested():
+            raise
         print(f'campaign refused:\n{refusal}', file=sys.stderr)
         raise SystemExit(2)
     if status:

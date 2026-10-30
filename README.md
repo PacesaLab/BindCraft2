@@ -23,6 +23,8 @@ source .venv/bin/activate
 
 In a new terminal, return to `BindCraft2` and run `source .venv/bin/activate` again. See the [installation and running guide](docs/source/installation.md) for existing environments, older GPUs, clusters, containers and troubleshooting.
 
+Experimental Apple Silicon support requires macOS 14 or newer and native ARM64 Python 3.12+. Install with `bash install.sh metal`, then follow the [Apple Silicon instructions](docs/source/installation.md#apple-silicon) for campaign commands and memory controls. Mac unified-memory requirements differ from CUDA VRAM requirements.
+
 ## Run your first design
 
 From the repository root, with the environment active:

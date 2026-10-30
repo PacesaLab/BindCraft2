@@ -303,6 +303,12 @@ def interface_hydrophobicity_metric(protein_states: ProteinStates, predictions: 
 def binder_secondary_structure(protein_complex: dict[str, Protein], binder: str) -> np.ndarray | None:
     atom_arrays = (build_atom_array({chain: protein_complex[chain]}) for chain in binder_copy_chains(protein_complex, binder))
     annotations = [struc.annotate_sse(atom_array) for atom_array in atom_arrays if atom_array is not None]
+    from bindcraft._apple import is_metal_backend, metal_requested
+    if metal_requested() and is_metal_backend():
+        # Biotite 2's integer annotations need symbols for Apple's SSE metrics
+        # and beta-sheet adaptation; other backends keep upstream behavior.
+        annotations = [np.asarray(struc.PSeaElement.to_symbols(sse))
+                       if np.issubdtype(sse.dtype, np.integer) else sse for sse in annotations]
     return np.concatenate(annotations) if annotations else None
 
 def secondary_structure_fraction(protein_states: ProteinStates, predictions: StructurePredictions, secondary_structure_code: str, prediction_state: str, binder: str) -> float | None:
