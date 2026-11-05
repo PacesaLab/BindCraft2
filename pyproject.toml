@@ -6,7 +6,7 @@ dependencies = [
     "jax>=0.11,<0.12",
     "dm-haiku",
     "optax",
-    "biotite",
+    "biotite>=2.0",
     "matplotlib",
     "numpy",
     "scipy",
