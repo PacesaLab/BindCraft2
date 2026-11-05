@@ -336,7 +336,7 @@ def read_structure_atoms(source: str) -> tuple[dict, ...]:
         warnings.filterwarnings('ignore', message=r'\d+ elements were guessed from atom name', category=UserWarning)
         if is_mmcif_structure(source, text):
             block = _pdbx.CIFFile.read(io.StringIO(text)).block
-            structure = _pdbx.get_structure(block, model=1, extra_fields=['b_factor'])
+            structure = _pdbx.get_structure(block, model=1, extra_fields=['b_factor'], use_author_fields=True)
         else:
             structure = _pdb.PDBFile.read(io.StringIO(text)).get_structure(model=1, extra_fields=['b_factor'])
     b_factors = structure.b_factor if 'b_factor' in structure.get_annotation_categories() else _np.zeros(structure.array_length())

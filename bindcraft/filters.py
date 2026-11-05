@@ -300,9 +300,13 @@ def interface_hydrophobicity_metric(protein_states: ProteinStates, predictions: 
     hydrophobic_residues = np.array([amino_acid in HYDROPHOBIC_AMINO_ACIDS for amino_acid in sequence])
     return float((interface_residues & hydrophobic_residues).sum()) / float(interface_residues.sum())
 
+def secondary_structure_symbols(annotation: np.ndarray) -> np.ndarray:
+    """biotite v1 & v2 compatible secondary structures annotations"""
+    return annotation if annotation.dtype.kind == 'U' else struc.PSeaElement.to_symbols(annotation)
+
 def binder_secondary_structure(protein_complex: dict[str, Protein], binder: str) -> np.ndarray | None:
     atom_arrays = (build_atom_array({chain: protein_complex[chain]}) for chain in binder_copy_chains(protein_complex, binder))
-    annotations = [struc.annotate_sse(atom_array) for atom_array in atom_arrays if atom_array is not None]
+    annotations = [secondary_structure_symbols(struc.annotate_sse(atom_array)) for atom_array in atom_arrays if atom_array is not None]
     return np.concatenate(annotations) if annotations else None
 
 def secondary_structure_fraction(protein_states: ProteinStates, predictions: StructurePredictions, secondary_structure_code: str, prediction_state: str, binder: str) -> float | None:
