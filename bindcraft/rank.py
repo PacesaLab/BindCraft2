@@ -246,7 +246,7 @@ def metric_guide_text(with_registry: bool=False, purpose: str='rank') -> str:
     for modality, metrics in MODALITY_METRICS.items():
         lines += [f'  {modality}'] + [f'    {name:<29}{meaning}' for name, meaning in metrics.items()]
     extras = registered_extras() if with_registry else []
-    lines += ['  also registered in this build'] + [f'    {name}' for name in extras] if extras else lines
+    lines += (['  also registered in this build'] + [f'    {name}' for name in extras]) if extras else []
     return '\n'.join(lines + ['', *AGGREGATE_HELP, '',
                               'a check recorded once per target is also addressable per target, written <metric>.<target name>.',
                               'a check the campaign never recorded is recomputed from the structures it kept.',
