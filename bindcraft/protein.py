@@ -141,7 +141,10 @@ def relax_energy(atoms: Array, geometry: dict) -> Array:
             + jnp.sum(geometry['position_weights'] * jnp.sum(jnp.square(atoms - geometry['input_atoms']), -1)))
 
 def relax_protein_complex(protein_complex: dict[str, 'Protein'], parameters: dict | None=None) -> dict[str, 'Protein']:
-    parameters = {**default_relax_parameters(), **(parameters or {})}
+    parameters = {**default_relax_parameters(), **{name: value for name, value in (parameters or {}).items() if value is not None}}
+    for name, value in parameters.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not _np.isfinite(value) or value < 0.0:
+            raise ValueError(f'relax_{name} must be a non-negative finite number, not {value!r}')
     geometry = relax_geometry(protein_complex, parameters)
     energy_gradient = jax.jit(jax.grad(relax_energy))
     energy_terms = {term: geometry[term] for term in RELAX_ENERGY_TERMS}
