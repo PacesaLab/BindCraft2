@@ -20,6 +20,17 @@ MAXIMUM_WORKERS_PER_GPU = 8
 AUTOMATIC_WORKERS_PER_GPU = 7
 TRAJECTORY_ONLY_WORKERS_PER_GPU = 1
 CUDA_UUID_BYTES = 16
+KFD_TOPOLOGY_NODES = '/sys/class/kfd/kfd/topology/nodes'
+DRM_CLASS = '/sys/class/drm'
+DRI_DEVICES = '/dev/dri'
+BYTES_PER_GIB = 1 << 30
+#a card with no unique_id is labelled 'ROCm-<physical index>' instead, so the label can't be confused
+#with the visible index that gpu_ids also accepts
+ROCM_ORDINAL_LABEL = 'ROCm-'
+#HIP applies HIP_VISIBLE_DEVICES (or CUDA_VISIBLE_DEVICES when that is unset) on top of
+#ROCR_VISIBLE_DEVICES. A worker pinned with ROCR_VISIBLE_DEVICES sees a one-card list, so an
+#inherited HIP list would point past it and hide the card
+HIP_DEVICE_VARIABLES = ('HIP_VISIBLE_DEVICES', 'CUDA_VISIBLE_DEVICES')
 
 def running_as_design_worker() -> bool:
     return 'BINDCRAFT_WORKER_ID' in os.environ
@@ -36,7 +47,7 @@ def design_gpu_uuid(driver, ordinal: int) -> str:
     digits = blob.raw.hex()
     return 'GPU-' + '-'.join((digits[:8], digits[8:12], digits[12:16], digits[16:20], digits[20:]))
 
-def visible_design_gpus() -> list[str]:
+def cuda_visible_gpus() -> list[str]:
     try:
         driver, count = ctypes.CDLL('libcuda.so.1'), ctypes.c_int()
         cuda_driver_call(driver, 'cuInit', 0)
@@ -44,6 +55,97 @@ def visible_design_gpus() -> list[str]:
         return [design_gpu_uuid(driver, ordinal) for ordinal in range(count.value)]
     except OSError:
         return []
+
+def sysfs_fields(path: str) -> dict[str, int]:
+    fields = {}
+    with open(path) as listing:
+        for line in listing:
+            name, _, value = line.strip().partition(' ')
+            if value.isdigit():
+                fields[name] = int(value)
+    return fields
+
+def render_node_opens(minor: int | None) -> bool:
+    #skip cards whose render node can't be opened, e.g. not passed into the container or denied by the cgroup
+    if minor is None:
+        return False
+    try:
+        os.close(os.open(os.path.join(DRI_DEVICES, f'renderD{minor}'), os.O_RDWR))
+        return True
+    except OSError:
+        return False
+
+def rocm_card_name(gfx_target_version: int, compute_units: int) -> str | None:
+    if not gfx_target_version:
+        return None
+    major, minor, stepping = gfx_target_version // 10000, gfx_target_version // 100 % 100, gfx_target_version % 100
+    return f'AMD gfx{major}{minor:x}{stepping:x} {compute_units}CU'
+
+def rocm_physical_gpus() -> list[dict]:
+    #read the kernel's KFD topology directly, so this needs no ROCm tools in the image and doesn't
+    #start a HIP runtime in the parent; nodes are walked in the order ROCr numbers its GPUs
+    try:
+        nodes = sorted((node for node in os.listdir(KFD_TOPOLOGY_NODES) if node.isdigit()), key=int)
+    except OSError:
+        return []
+    gpus = []
+    for node in nodes:
+        try:
+            properties = sysfs_fields(os.path.join(KFD_TOPOLOGY_NODES, node, 'properties'))
+        except OSError:
+            continue
+        if not properties.get('simd_count') or not render_node_opens(properties.get('drm_render_minor')):
+            continue
+        unique_id, ordinal = properties.get('unique_id', 0), len(gpus)
+        gpus.append({
+            'id': f'GPU-{unique_id:016x}' if unique_id else f'{ROCM_ORDINAL_LABEL}{ordinal}',
+            'uuid': f'GPU-{unique_id:016x}' if unique_id else None,
+            'ordinal': ordinal,
+            'render_minor': properties['drm_render_minor'],
+            'name': rocm_card_name(properties.get('gfx_target_version', 0), properties['simd_count'] // max(1, properties.get('simd_per_cu', 1)))})
+    return gpus
+
+def listed_devices(variable: str) -> list[str] | None:
+    #unset means no filter; set but empty means no cards, as with CUDA_VISIBLE_DEVICES
+    value = os.environ.get(variable)
+    return None if value is None else [entry.strip() for entry in value.split(',') if entry.strip()]
+
+def narrow_to_listed(gpus: list[dict], entries: list[str] | None) -> list[dict]:
+    if entries is None:
+        return gpus
+    narrowed = []
+    for entry in entries:
+        if entry.upper().startswith('GPU-'):
+            named = [gpu for gpu in gpus if gpu['uuid'] and gpu['uuid'].lower() == entry.lower()]
+        else:
+            named = gpus[int(entry):int(entry) + 1] if entry.isdigit() else []
+        if not named:
+            break  #like the runtimes, stop at the first entry that doesn't match a card
+        narrowed += [gpu for gpu in named if gpu not in narrowed]
+    return narrowed
+
+def rocm_visible_gpus() -> list[dict]:
+    #sysfs lists every card on the node, so apply the filtering the ROCm runtime would:
+    #ROCR_VISIBLE_DEVICES over the physical cards, then HIP_VISIBLE_DEVICES over what's left
+    gpus = narrow_to_listed(rocm_physical_gpus(), listed_devices('ROCR_VISIBLE_DEVICES'))
+    hip_variable = 'HIP_VISIBLE_DEVICES' if 'HIP_VISIBLE_DEVICES' in os.environ else 'CUDA_VISIBLE_DEVICES'
+    return narrow_to_listed(gpus, listed_devices(hip_variable))
+
+def visible_design_accelerator() -> tuple[str | None, list[str]]:
+    cuda_gpus = cuda_visible_gpus()
+    if cuda_gpus:
+        return 'cuda', cuda_gpus
+    rocm_gpus = [gpu['id'] for gpu in rocm_visible_gpus()]
+    return ('rocm', rocm_gpus) if rocm_gpus else (None, [])
+
+def visible_design_gpus() -> list[str]:
+    return visible_design_accelerator()[1]
+
+def pinned_worker_environment(accelerator: str | None, gpu: str) -> dict:
+    if accelerator != 'rocm':
+        return {**os.environ, 'CUDA_VISIBLE_DEVICES': gpu}
+    environment = {name: value for name, value in os.environ.items() if name not in HIP_DEVICE_VARIABLES}
+    return environment | {'ROCR_VISIBLE_DEVICES': gpu.removeprefix(ROCM_ORDINAL_LABEL)}
 
 def selected_design_gpus(gpu_ids: str | int | list | None=None) -> list[str]:
     gpus = visible_design_gpus()
@@ -57,7 +159,7 @@ def selected_design_gpus(gpu_ids: str | int | list | None=None) -> list[str]:
         raise ValueError(f'requested GPUs {missing} are not visible to this process')
     return list(dict.fromkeys(aliases[device] for device in requested))
 
-def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
+def cuda_gpu_memory_gb() -> dict[str, tuple[float, float]]:
     try:
         listing = subprocess.run(['nvidia-smi', '--query-gpu=uuid,memory.free,memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
@@ -70,6 +172,33 @@ def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
         except ValueError:
             continue
     return memory
+
+def rocm_gpu_memory_gb() -> dict[str, tuple[float, float]]:
+    memory = {}
+    for gpu in rocm_visible_gpus():
+        device = os.path.join(DRM_CLASS, f"renderD{gpu['render_minor']}", 'device')
+        try:
+            with open(os.path.join(device, 'mem_info_vram_total')) as total_file, open(os.path.join(device, 'mem_info_vram_used')) as used_file:
+                total_bytes, used_bytes = int(total_file.read()), int(used_file.read())
+        except (OSError, ValueError):
+            continue
+        memory[gpu['id']] = (max(0, total_bytes - used_bytes) / BYTES_PER_GIB, total_bytes / BYTES_PER_GIB)
+    return memory
+
+def design_gpu_memory_gb() -> dict[str, tuple[float, float]]:
+    return rocm_gpu_memory_gb() if visible_design_accelerator()[0] == 'rocm' else cuda_gpu_memory_gb()
+
+def cuda_card_names() -> dict[str, str]:
+    try:
+        listing = subprocess.run(['nvidia-smi', '--query-gpu=uuid,name', '--format=csv,noheader'], capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return {}
+    return {row[0].strip(): row[1].strip() for row in (line.split(',', 1) for line in listing.splitlines() if line.strip()) if len(row) == 2}
+
+def design_card_names() -> dict[str, str]:
+    if visible_design_accelerator()[0] == 'rocm':
+        return {gpu['id']: gpu['name'] for gpu in rocm_visible_gpus() if gpu['name']}
+    return cuda_card_names()
 
 def estimate_design_memory_gb(residue_count: int) -> float:
     return DESIGN_MEMORY_SAFETY_FACTOR * (DESIGN_MODEL_RESIDENT_GB + DESIGN_ACTIVATION_BYTES_PER_RESIDUE_PAIR * int(residue_count) ** 2 / 1e9)
@@ -170,6 +299,7 @@ def worker_residue_count(settings: dict, worker: dict, residue_count: int | None
     return design_residue_count({**settings, 'binder_lengths': list(worker['lengths'])}) if worker.get('lengths') else residue_count or 0
 
 def plan_design_workers(settings: dict, residue_count: int | None=None, trajectory_budget: int | None=None) -> list[dict]:
+    accelerator = visible_design_accelerator()[0]
     gpus = selected_design_gpus(os.environ.get('BINDCRAFT_GPU_IDS', settings.get('gpu_ids')))
     gpu_memory = design_gpu_memory_gb()
     worker_limit = int(os.environ.get('BINDCRAFT_DESIGN_WORKERS', settings.get('design_workers') or 0))
@@ -177,7 +307,7 @@ def plan_design_workers(settings: dict, residue_count: int | None=None, trajecto
     host_ceiling = host_memory_worker_ceiling(len(gpus))
     for card, gpu in enumerate(gpus):
         packed = min(host_ceiling, design_workers_per_gpu(settings, gpu_memory.get(gpu, (0.0, 0.0))[0], residue_count))
-        plan += [{'gpu': gpu, 'card': card, 'memory_fraction': 0.0} for _ in range(packed)]
+        plan += [{'gpu': gpu, 'card': card, 'memory_fraction': 0.0, 'accelerator': accelerator} for _ in range(packed)]
     worker_limits = [limit for limit in (worker_limit, trajectory_budget) if limit]
     plan = assign_worker_length_buckets(plan[:min(worker_limits)] if worker_limits else plan, campaign_length_buckets(settings))
     for worker in plan:
@@ -282,7 +412,7 @@ def launch_design_workers(plan: list[dict], log_directory: str, worker_command: 
             if rung != launched_rung and launch_stagger_seconds:
                 time.sleep(launch_stagger_seconds)
             launched_rung = rung
-            environment = {**os.environ, 'CUDA_VISIBLE_DEVICES': worker['gpu'], 'BINDCRAFT_WORKER_ID': str(worker_index), 'BINDCRAFT_WORKER_COUNT': str(len(plan))}
+            environment = {**pinned_worker_environment(worker.get('accelerator', 'cuda'), worker['gpu']), 'BINDCRAFT_WORKER_ID': str(worker_index), 'BINDCRAFT_WORKER_COUNT': str(len(plan))}
             if worker.get('memory_fraction'):
                 environment['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(worker['memory_fraction'])
             if worker.get('lengths'):

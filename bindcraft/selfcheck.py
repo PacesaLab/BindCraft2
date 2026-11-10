@@ -3,7 +3,7 @@ import sys
 from bindcraft.model_weights import missing_model_weights, missing_shipped_weights, model_weights
 
 REQUIRED_MODULES = ('jax', 'haiku', 'optax', 'biotite', 'matplotlib', 'numpy', 'scipy', 'ml_collections', 'absl')
-ACCELERATOR_MODULES = {'cuda13': ('jax_plugins.xla_cuda13', 'cuequivariance_jax'), 'cuda12': ('jax_plugins.xla_cuda12', 'cuequivariance_jax'), 'rocm': ('jax_plugins.xla_rocm',), 'oneapi': ('jax_plugins.xla_oneapi',)}
+ACCELERATOR_MODULES = {'cuda13': ('jax_plugins.xla_cuda13', 'cuequivariance_jax'), 'cuda12': ('jax_plugins.xla_cuda12', 'cuequivariance_jax'), 'rocm': ('jax_plugins.xla_rocm7',), 'oneapi': ('jax_plugins.xla_oneapi',)}
 
 def module_present(name: str) -> bool:
     try:

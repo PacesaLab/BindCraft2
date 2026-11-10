@@ -94,7 +94,7 @@ A campaign designs against five multimer models and holds two monomer models bac
 
 A prediction shape costs about 60 s to compile and 1.5 s to read back, so a campaign keeps its compiled graphs between runs under `~/.cache/bindcraft/compile_cache/<card>`, filed by GPU type because an executable is not portable across cards. It prints `compiled graphs cached in <path>` when it does.
 
-That per-card cache needs `nvidia-smi` to name the card. **Where `nvidia-smi` cannot be reached, including inside the shipped container image, which does not carry it, graphs go to `${TMPDIR:-/tmp}/bindcraft_xla_cache` instead** and no caching line is printed, so every campaign pays its compiles again. Set `JAX_COMPILATION_CACHE_DIR` to keep them somewhere durable, which is also worth doing on a cluster whose nodes all carry the same card. Where the home cache exists but cannot be written, the graphs go under the campaign's own output folder.
+On NVIDIA, that per-card cache needs `nvidia-smi` to name the card. An AMD card is named from sysfs by its gfx target and compute-unit count, for example `AMD gfx90a 110CU`, so it needs no extra tool. **Where `nvidia-smi` cannot be reached, including inside the shipped container image, which does not carry it, graphs go to `${TMPDIR:-/tmp}/bindcraft_xla_cache` instead** and no caching line is printed, so every campaign pays its compiles again. Set `JAX_COMPILATION_CACHE_DIR` to keep them somewhere durable, which is also worth doing on a cluster whose nodes all carry the same card. Where the home cache exists but cannot be written, the graphs go under the campaign's own output folder.
 
 These are working files. Deleting them costs compile time and no results.
 
@@ -151,7 +151,7 @@ A campaign uses **every GPU it can see, without being asked**, and packs several
 
 ### How a campaign fills a card
 
-Visible cards are read from `CUDA_VISIBLE_DEVICES`, and from `nvidia-smi` when that is unset. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
+Visible cards are read from `CUDA_VISIBLE_DEVICES`, and from `nvidia-smi` when that is unset. On AMD they are read from the kernel's `/sys/class/kfd` topology, narrowed by `ROCR_VISIBLE_DEVICES` and then `HIP_VISIBLE_DEVICES` (or `CUDA_VISIBLE_DEVICES`) as the ROCm runtime would apply them. Free memory is read from sysfs, and each worker is pinned to its card with `ROCR_VISIBLE_DEVICES`. Each GCD of an MI250X counts as a card. A whole-cycle campaign runs up to **seven workers per card**, as many as its free memory holds. On a GH200 a forty-trajectory campaign took 3620 s at one worker and 2021 s at seven.
 
 If `trajectory_only` is set in a campaign, or a card whose memory cannot be read, BindCraft2 runs **one worker per card**.
 
