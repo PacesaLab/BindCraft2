@@ -9,7 +9,6 @@ import biotite.structure.io.pdbx as _pdbx
 import jax
 import jax.numpy as jnp
 import numpy as _np
-import optax
 from dataclasses import dataclass, replace
 from enum import IntFlag
 from itertools import accumulate
@@ -82,88 +81,13 @@ def kabsch(coordinates: Array, reference_coordinates: Array, alignment_weights: 
     rotation = alignment_matrix_product(right_vectors.T * jnp.array([1.0, 1.0, rotation_determinant], dtype=coordinates.dtype), left_vectors.T)
     return rotation, coordinate_center, reference_center
 
-RELAX_VDW_RADIUS_BY_ELEMENT: dict[str, float] = {'C': 1.7, 'N': 1.55, 'O': 1.52, 'S': 1.8}
-RELAX_BACKBONE_ATOM_NAMES: tuple[str, ...] = ('N', 'CA', 'C', 'O', 'OXT')
-ATOM37_VDW_RADIUS: Array = jnp.array([RELAX_VDW_RADIUS_BY_ELEMENT.get(name[0], RELAX_VDW_RADIUS_BY_ELEMENT['C']) for name in ATOM_NAMES])
-ATOM37_IS_BACKBONE: Array = jnp.array([name in RELAX_BACKBONE_ATOM_NAMES for name in ATOM_NAMES])
-RELAX_ENERGY_TERMS: tuple[str, ...] = ('input_atoms', 'position_weights', 'bond_rows', 'bond_columns', 'bond_lengths', 'clashing_pairs', 'closest_approach', 'weight_bond', 'weight_clash')
-
-#a restrained minimum settles short of the separation it is pushed towards, so the tolerance has to leave a relieved contact clear of the 2.5 A a clash is counted at
 def default_relax_parameters() -> dict:
-    return {'steps': 200, 'learning_rate': 0.02, 'restraint_backbone': 10.0, 'restraint_sidechain': 0.5,
-            'weight_bond': 100.0, 'weight_clash': 5.0, 'overlap_tol': 0.4, 'min_sep': 2.5}
-
-def relax_geometry(protein_complex: dict[str, 'Protein'], parameters: dict) -> dict:
-    chain_letters = output_chain_letters(protein_complex)
-    chains = sorted(protein_complex, key=chain_letters.__getitem__)
-    atoms, chain_position, residue_number, atom_slot, resolved = [], [], [], [], []
-    for position, chain in enumerate(chains):
-        protein = protein_complex[chain]
-        slots = len(protein) * len(ATOM_NAMES)
-        atoms.append(_np.asarray(protein.atoms, dtype=_np.float64).reshape(slots, 3))
-        resolved.append(_np.asarray(protein.atom_mask).reshape(slots))
-        chain_position.append(_np.full(slots, position))
-        residue_number.append(_np.repeat(_np.asarray(protein.residue_index), len(ATOM_NAMES)))
-        atom_slot.append(_np.tile(_np.arange(len(ATOM_NAMES)), len(protein)))
-    atoms, resolved = _np.concatenate(atoms), _np.concatenate(resolved)
-    chain_position, residue_number, atom_slot = (_np.concatenate(rows)[resolved] for rows in (chain_position, residue_number, atom_slot))
-    atoms = atoms[resolved]
-    radii = _np.asarray(ATOM37_VDW_RADIUS)[atom_slot]
-    distances = _np.sqrt(_np.maximum(_np.sum(_np.square(atoms[:, None, :] - atoms[None, :, :]), -1), 0.0))
-    _np.fill_diagonal(distances, _np.inf)
-    same_chain = chain_position[:, None] == chain_position[None, :]
-    same_residue = same_chain & (residue_number[:, None] == residue_number[None, :])
-    neighbouring_residues = same_chain & (_np.abs(residue_number[:, None] - residue_number[None, :]) <= 1)
-    sulfur = (atom_slot == ATOM_INDEX['SG']) | (atom_slot == ATOM_INDEX['SD'])
-    disulfide = sulfur[:, None] & sulfur[None, :] & (distances < 2.5)
-    carbonyl, amide_nitrogen = atom_slot == ATOM_INDEX['C'], atom_slot == ATOM_INDEX['N']
-    amide = ((carbonyl[:, None] & amide_nitrogen[None, :]) | (amide_nitrogen[:, None] & carbonyl[None, :])) & (distances < 1.9)
-    bonded = disulfide | amide | (same_residue & (distances < 1.9))
-    rows, columns = _np.triu_indices(len(atoms), k=1)
-    bond = bonded[rows, columns]
-    clashing_pairs = ~neighbouring_residues & ~(disulfide | amide)
-    _np.fill_diagonal(clashing_pairs, False)
-    return {'input_atoms': jnp.asarray(atoms, dtype=jnp.float32),
-            'position_weights': jnp.asarray(_np.where(_np.asarray(ATOM37_IS_BACKBONE)[atom_slot], parameters['restraint_backbone'], parameters['restraint_sidechain']), dtype=jnp.float32),
-            'bond_rows': jnp.asarray(rows[bond]), 'bond_columns': jnp.asarray(columns[bond]),
-            'bond_lengths': jnp.asarray(distances[rows, columns][bond], dtype=jnp.float32),
-            'clashing_pairs': jnp.asarray(clashing_pairs, dtype=jnp.float32),
-            'closest_approach': jnp.asarray(_np.maximum(radii[:, None] + radii[None, :] - parameters['overlap_tol'], parameters['min_sep']), dtype=jnp.float32),
-            'weight_bond': float(parameters['weight_bond']), 'weight_clash': float(parameters['weight_clash']),
-            'resolved': resolved, 'chains': chains}
-
-def relax_energy(atoms: Array, geometry: dict) -> Array:
-    distances = jnp.sqrt(jnp.maximum(jnp.sum(jnp.square(atoms[:, None, :] - atoms[None, :, :]), -1), 0.0) + 1e-06)
-    overlap = jnp.maximum(0.0, geometry['closest_approach'] - distances)
-    bond_lengths = jnp.sqrt(jnp.sum(jnp.square(atoms[geometry['bond_rows']] - atoms[geometry['bond_columns']]), -1) + 1e-06)
-    return (0.5 * geometry['weight_clash'] * jnp.sum(geometry['clashing_pairs'] * overlap * overlap)
-            + geometry['weight_bond'] * jnp.sum(jnp.square(bond_lengths - geometry['bond_lengths']))
-            + jnp.sum(geometry['position_weights'] * jnp.sum(jnp.square(atoms - geometry['input_atoms']), -1)))
+    from bindcraft.relax import default_relax_parameters as relax_defaults
+    return relax_defaults()
 
 def relax_protein_complex(protein_complex: dict[str, 'Protein'], parameters: dict | None=None) -> dict[str, 'Protein']:
-    parameters = {**default_relax_parameters(), **{name: value for name, value in (parameters or {}).items() if value is not None}}
-    for name, value in parameters.items():
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not _np.isfinite(value) or value < 0.0:
-            raise ValueError(f'relax_{name} must be a non-negative finite number, not {value!r}')
-    geometry = relax_geometry(protein_complex, parameters)
-    energy_gradient = jax.jit(jax.grad(relax_energy))
-    energy_terms = {term: geometry[term] for term in RELAX_ENERGY_TERMS}
-    atoms = geometry['input_atoms']
-    optimizer = optax.adam(parameters['learning_rate'])
-    optimizer_state = optimizer.init(atoms)
-    for _ in range(int(parameters['steps'])):
-        updates, optimizer_state = optimizer.update(energy_gradient(atoms, energy_terms), optimizer_state)
-        atoms = optax.apply_updates(atoms, updates)
-    relaxed_slots = _np.zeros((len(geometry['resolved']), 3), dtype=_np.float32)
-    relaxed_slots[geometry['resolved']] = _np.asarray(atoms)
-    relaxed_complex, slot = {}, 0
-    for chain in geometry['chains']:
-        protein = protein_complex[chain]
-        chain_atoms = relaxed_slots[slot:slot + len(protein) * len(ATOM_NAMES)].reshape(len(protein), len(ATOM_NAMES), 3)
-        slot += len(protein) * len(ATOM_NAMES)
-        kept = _np.where(_np.asarray(protein.atom_mask)[..., None], chain_atoms, _np.asarray(protein.atoms, dtype=_np.float32))
-        relaxed_complex[chain] = protein.replace(atoms=jnp.asarray(kept, dtype=protein.atoms.dtype))
-    return relaxed_complex
+    from bindcraft.relax import relax
+    return relax(protein_complex, parameters)
 
 @dataclass
 class Protein:

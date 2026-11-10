@@ -32,7 +32,7 @@ Each layer overrides the ones above it in the table. A target therefore wins ove
 
 ### Every setting at its default
 
-`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 239 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
+`settings/core/reference.json` in your BindCraft2 repo is the catalogue of all 237 settings BC2 reads, each written at its default. `null` there means off or unset, not zero. **This file is never loaded**; it is documentation only. Change a default for every campaign in `settings/core/default.json` in your BindCraft2 repo, and change one campaign in its own JSON or with `--set`.
 
 ### Paths
 
@@ -469,10 +469,9 @@ A sweep needs `max_trajectories`, divides its budget between arms, and disables 
 | `archive_trajectories` | false | Zip each completed trajectory folder. |
 | `sparse_output` | false | Disable optional structures, viewers, plots and the sequence archive unless individually requested; useful for transfers. |
 | `relax_accepted_designs` | false | Save an additional restrained, clash-minimised complex. This does not replace the prediction. |
-| `relax_steps`, `relax_learning_rate` | 200, 0.02 | Duration and step size of optional relaxation. |
-| `relax_restraint_backbone`, `relax_restraint_sidechain` | 10, 0.5 | Restrain coordinates toward their starting positions. |
-| `relax_weight_bond`, `relax_weight_clash` | 100, 5 | Relative penalties for distorted bonds and clashes. |
-| `relax_overlap_tol`, `relax_min_sep` | 0.4 Å, 2.5 Å | How far two atoms may approach below contact, and the separation no pair is pushed under. |
+| `relax_steps`, `relax_learning_rate` | 900, 0.02 | Duration and step size of the relaxation. |
+| `relax_restraint_backbone`, `relax_restraint_sidechain` | 10, 0.25 | Restrain coordinates toward their starting positions. Side chains are held an order of magnitude more loosely than the backbone, which is what lets a clash relieve without the backbone moving. |
+| `relax_weight_clash`, `relax_overlap_tol` | 15, 0.4 Å | Clash penalty, and how far two atoms may approach below the sum of their van der Waals radii before it applies. |
 | `length_bucket_size` | 32 | Pad lengths to reuse compiled calculations; 1 disables padding. |
 | `compile_next_length` | true | Prepare the next length while the current trajectory runs. |
 | `subbatch_size` | `auto` | Split large calculations to reduce memory; an integer fixes the chunk size, `null` disables chunking. |
